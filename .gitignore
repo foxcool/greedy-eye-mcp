@@ -1,0 +1,12 @@
+# Build output
+/bin/
+
+# OS / editor noise
+.DS_Store
+
+# Test/coverage artifacts
+*.out
+
+# Vendor-specific assistant configs (kept local, never committed)
+/.claude/
+/.cursor/

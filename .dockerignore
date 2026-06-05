@@ -1,0 +1,8 @@
+.git
+bin
+*.md
+.dockerignore
+.gitignore
+.DS_Store
+.claude
+.cursor
