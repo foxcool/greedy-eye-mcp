@@ -13,8 +13,10 @@ type Config struct {
 	// BackendURL is the base URL of the greedy-eye Connect-RPC backend
 	// (for example "http://localhost:8080" or "http://greedy-eye:8080").
 	BackendURL string
-	// ListenAddr is the address the MCP HTTP server binds to.
-	ListenAddr string
+	// AuthToken is an optional psina credential (a personal access token) sent as
+	// "Authorization: Bearer <token>" on every backend call. Required when the
+	// backend sits behind psina ForwardAuth; empty for direct-to-eye dev.
+	AuthToken string
 	// Protocol selects how we talk to the backend: "connect" (default) or "grpc".
 	// Connect works over plain HTTP/1.1; grpc requires HTTP/2 (h2c for plaintext).
 	Protocol string
@@ -30,7 +32,7 @@ type Config struct {
 func Load() (Config, error) {
 	cfg := Config{
 		BackendURL:      getEnv("GREEDY_EYE_BACKEND_URL", "http://localhost:8080"),
-		ListenAddr:      getEnv("MCP_LISTEN_ADDR", ":8090"),
+		AuthToken:       getEnv("GREEDY_EYE_AUTH_TOKEN", ""),
 		Protocol:        strings.ToLower(getEnv("BACKEND_PROTOCOL", "connect")),
 		EnableMutations: getEnv("ENABLE_MUTATIONS", "false") == "true",
 	}

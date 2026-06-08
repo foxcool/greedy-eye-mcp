@@ -27,10 +27,27 @@ func New(cfg config.Config) *Clients {
 	httpClient, opts := transport(cfg)
 	base := strings.TrimRight(cfg.BackendURL, "/")
 
+	if cfg.AuthToken != "" {
+		opts = append(opts, connect.WithInterceptors(authInterceptor(cfg.AuthToken)))
+	}
+
 	return &Clients{
 		MarketData: apiv1connect.NewMarketDataServiceClient(httpClient, base, opts...),
 		Portfolio:  apiv1connect.NewPortfolioServiceClient(httpClient, base, opts...),
 		Automation: apiv1connect.NewAutomationServiceClient(httpClient, base, opts...),
+	}
+}
+
+// authInterceptor sets "Authorization: Bearer <token>" on every outbound request
+// so the backend's psina ForwardAuth can resolve the caller. Unary only; the MCP
+// tools make no streaming calls.
+func authInterceptor(token string) connect.UnaryInterceptorFunc {
+	bearer := "Bearer " + token
+	return func(next connect.UnaryFunc) connect.UnaryFunc {
+		return func(ctx context.Context, req connect.AnyRequest) (connect.AnyResponse, error) {
+			req.Header().Set("Authorization", bearer)
+			return next(ctx, req)
+		}
 	}
 }
 

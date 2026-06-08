@@ -1,18 +1,25 @@
 # Agent Instructions — greedy-eye-mcp
 
 MCP server that exposes the greedy-eye backend to MCP clients (Claude and others)
-over Streamable HTTP. Each tool is a thin, typed proxy onto a backend
-Connect-RPC call.
+over stdio. Each tool is a thin, typed proxy onto a backend Connect-RPC call.
 
 ## Architecture
 
-- Transport to clients: **Streamable HTTP** (mark3labs/mcp-go), mounted at `/mcp`.
+- Transport to clients: **stdio** (mark3labs/mcp-go `ServeStdio`). The client
+  launches the binary; JSON-RPC flows over stdin/stdout. **stdout is the
+  protocol — all logging must go to stderr.**
 - Transport to backend: **Connect-RPC** (`connectrpc.com/connect`). The greedy-eye
   backend speaks Connect/gRPC/gRPC-Web; we default to the Connect protocol over
   HTTP/1.1. `BACKEND_PROTOCOL=grpc` switches to gRPC (HTTP/2; h2c for plaintext).
 - This is a pure proxy: tool call -> Connect-RPC call -> response. It holds no
   state of its own. BEAM-style concurrency advantages do not apply here; Go's
   goroutines + a connection pool are the right fit.
+- Auth: when `GREEDY_EYE_AUTH_TOKEN` is set, a Connect interceptor
+  (`internal/backend/client.go authInterceptor`) attaches `Authorization: Bearer
+  <token>` to every backend call. The backend is fronted by psina ForwardAuth,
+  which verifies the token (an opaque psina personal access token, `psn_...`) and
+  injects `X-User-Id`. We never send `X-User-Id` ourselves — Traefik overwrites
+  it from psina's response.
 
 ## Protobuf contract
 
@@ -23,10 +30,10 @@ and the generated code; we depend on it.
 
 `go.mod` pins the backend with a local `replace` directive
 (`=> ../greedy-eye`) so it resolves offline against the sibling checkout, with
-no tags or GOPRIVATE needed. See the build-context TODO in the Dockerfile: the
-`replace` points outside the Docker build context and must be addressed before
-containerizing (move context to `ge/`, or tag+push the backend and drop the
-replace).
+no tags or GOPRIVATE needed. This works for local builds and local GoReleaser
+runs. CI releases are blocked by it: CI checks out only this repo, so the sibling
+is absent. To unblock CI, tag the backend with a version containing `api/v1`,
+bump the `require`, and drop the `replace` line.
 
 ## First-run setup
 
@@ -40,7 +47,7 @@ make bootstrap   # tidy + build
 - `internal/backend/` — Connect-RPC client construction (typed clients from the
   backend `apiv1connect` package).
 - `internal/mcpserver/` — MCP server, tool registration, formatting helpers.
-- `cmd/server/` — entrypoint (HTTP server, graceful shutdown).
+- `cmd/server/` — entrypoint (stdio serve loop, logs to stderr).
 
 ## Safety: mutating tools are gated
 
@@ -51,12 +58,12 @@ NOT exposed. They are gated behind `ENABLE_MUTATIONS=true` and a deliberate
 money-moving operations to an LLM surface without explicit confirmation
 semantics.
 
-## Deployment note (remote MCP)
+## Distribution
 
-When added to a client as a remote connector, the connection originates from the
-client vendor's servers, not from the local machine. A server deployed inside a
-private cluster is unreachable unless exposed via a public ingress. For
-local-only use, front it with a stdio bridge instead.
+GoReleaser builds per-OS/arch archives (no Docker image); the binary runs locally
+as a stdio server launched by the client. `make snapshot` builds locally,
+`make release` publishes to GitHub Releases. Run it locally for now — see the
+`replace` caveat above for why CI releases are deferred.
 
 ## Conventions
 

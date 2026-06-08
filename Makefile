@@ -1,4 +1,4 @@
-.PHONY: help bootstrap tidy build run docker clean
+.PHONY: help bootstrap tidy build run snapshot release clean
 
 BIN := bin/server
 
@@ -17,8 +17,11 @@ build: ## Build the server binary into bin/
 run: ## Run the server locally
 	go run ./cmd/server
 
-docker: ## Build the container image
-	docker build -t greedy-eye-mcp:dev .
+snapshot: ## Local goreleaser build without publishing
+	goreleaser release --snapshot --clean
+
+release: ## Build and publish release archives with goreleaser
+	goreleaser release --clean
 
 clean: ## Remove build output
-	rm -rf bin
+	rm -rf bin dist

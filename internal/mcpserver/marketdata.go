@@ -140,4 +140,25 @@ func registerMarketDataTools(s *server.MCPServer, c *backend.Clients) {
 			return resultProto(resp.Msg)
 		},
 	)
+
+	s.AddTool(
+		mcp.NewTool("eye_fetch_external_prices",
+			mcp.WithDescription("Refresh prices from external sources (CoinGecko, Binance) and store them. "+
+				"A data-refresh action: it writes prices but moves no funds. "+
+				"Defaults to all assets and all configured sources."),
+			mcp.WithArray("asset_ids", mcp.Description("Limit to these asset UUIDs (default: all)."), mcp.WithStringItems()),
+			mcp.WithArray("source_ids", mcp.Description("Limit to these sources, e.g. coingecko, binance (default: all)."), mcp.WithStringItems()),
+		),
+		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			in := &apiv1.FetchExternalPricesRequest{
+				AssetIds:  req.GetStringSlice("asset_ids", nil),
+				SourceIds: req.GetStringSlice("source_ids", nil),
+			}
+			resp, err := c.MarketData.FetchExternalPrices(ctx, connect.NewRequest(in))
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			return resultProto(resp.Msg)
+		},
+	)
 }

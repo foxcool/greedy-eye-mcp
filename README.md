@@ -1,25 +1,47 @@
 # greedy-eye-mcp
 
 An [MCP](https://modelcontextprotocol.io) server that exposes the greedy-eye
-backend to MCP clients (Claude and others) over **Streamable HTTP**. Each tool is
-a thin, typed proxy onto a backend **Connect-RPC** call.
+backend to MCP clients (Claude and others) over **stdio**. The client launches
+the binary directly and talks to it over stdin/stdout. Each tool is a thin, typed
+proxy onto a backend **Connect-RPC** call.
 
 ## Quickstart
 
 ```bash
 # 1. Resolve deps and build
-make bootstrap
+make bootstrap            # -> bin/server
 
-# 2. Point it at a running greedy-eye backend and run
-GREEDY_EYE_BACKEND_URL=http://localhost:8080 make run
+# 2. Run it manually (normally the MCP client launches it for you)
+GREEDY_EYE_BACKEND_URL=http://localhost:8080 ./bin/server
 ```
 
 This module depends on the backend Go module `github.com/foxcool/greedy-eye`
 for the API contract, resolved via a local `replace => ../greedy-eye` in
 `go.mod`. Keep the sibling checkout present.
 
-The MCP endpoint is then served at `http://localhost:8090/mcp`, with a
-`/healthz` probe alongside it.
+The process speaks JSON-RPC over stdout; all logs go to stderr.
+
+## Connecting a client
+
+Point claude desktop/code at the built (or released) binary:
+
+```json
+{
+  "mcpServers": {
+    "greedy-eye": {
+      "command": "/absolute/path/to/greedy-eye-mcp",
+      "env": {
+        "GREEDY_EYE_BACKEND_URL": "https://eye-dev.darkfox.info",
+        "GREEDY_EYE_AUTH_TOKEN": "psn_..."
+      }
+    }
+  }
+}
+```
+
+Prebuilt binaries per OS/arch are published as archives via
+[GoReleaser](https://goreleaser.com) (`make release`); `make snapshot` builds
+them locally into `dist/`.
 
 ## Configuration
 
@@ -28,10 +50,18 @@ All configuration is via environment variables:
 | Variable                  | Default                  | Description                                            |
 | ------------------------- | ------------------------ | ------------------------------------------------------ |
 | `GREEDY_EYE_BACKEND_URL`  | `http://localhost:8080`  | Base URL of the greedy-eye Connect-RPC backend.        |
-| `MCP_LISTEN_ADDR`         | `:8090`                  | Address the MCP HTTP server binds to.                  |
+| `GREEDY_EYE_AUTH_TOKEN`   | _(empty)_                | psina personal access token, sent as `Authorization: Bearer`. Required behind psina ForwardAuth; empty for direct-to-eye dev. |
 | `BACKEND_PROTOCOL`        | `connect`                | `connect` or `grpc`.                                   |
 | `REQUEST_TIMEOUT`         | `30s`                    | Per-call timeout to the backend.                       |
 | `ENABLE_MUTATIONS`        | `false`                  | Gate for write/execute tools (none implemented yet).   |
+
+### Minting an auth token
+
+The backend sits behind Traefik with a psina ForwardAuth middleware. Mint a
+long-lived **personal access token** in psina (`auth.v1.AuthService/CreatePersonalAccessToken`,
+authenticated with a normal access token), and put the returned `psn_...` secret
+in `GREEDY_EYE_AUTH_TOKEN`. Revoke it any time via
+`RevokePersonalAccessToken`.
 
 ## Tools
 
@@ -59,23 +89,20 @@ greedy-eye stores balances and prices as raw integers scaled by a `decimals`
 field (uint256 on-chain values overflow int64). Tools return the raw value and,
 where useful, a `*_human` field with the decimal point applied.
 
-## Deployment
+## Distribution
 
-Build the image:
+`make release` runs GoReleaser to build per-OS/arch archives
+(`linux`/`darwin` × `amd64`/`arm64`) and publish them to GitHub Releases. No
+container image is shipped — the server runs as a local stdio binary launched by
+the client. `make snapshot` produces the same archives locally without
+publishing.
 
-```bash
-make docker
-```
-
-Deploy as a normal long-running service (e.g. a Kubernetes Deployment + Service).
-To use it as a remote connector in a client, expose it via a public ingress: the
-connection originates from the client vendor's servers, not your machine, so a
-cluster-internal address will not be reachable. For local-only use, front it with
-a stdio bridge.
+CI-driven, tag-triggered releases are blocked until the backend `api/v1` package
+is published in a tag (see the `replace` caveat in `AGENTS.md`); for now, run
+GoReleaser locally where the sibling checkout is present.
 
 ## API contract
 
 No protos or codegen live here. The contract is imported directly from the
 backend Go module (`github.com/foxcool/greedy-eye/api/v1` and its
-`apiv1connect` subpackage). See `AGENTS.md` for the dependency setup and the
-Dockerfile build-context caveat.
+`apiv1connect` subpackage). See `AGENTS.md` for the dependency setup.

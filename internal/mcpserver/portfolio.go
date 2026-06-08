@@ -111,4 +111,24 @@ func registerPortfolioTools(s *server.MCPServer, c *backend.Clients) {
 			return resultJSON(m)
 		},
 	)
+
+	s.AddTool(
+		mcp.NewTool("eye_sync_account",
+			mcp.WithDescription("Sync a wallet account's holdings from on-chain data (via Moralis). "+
+				"A data-refresh action: it upserts assets/holdings for the account but moves no funds. "+
+				"Only wallet-type accounts with a configured address can be synced."),
+			mcp.WithString("account_id", mcp.Required(), mcp.Description("Account UUID to sync.")),
+		),
+		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			accountID, err := req.RequireString("account_id")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			resp, err := c.Portfolio.SyncAccount(ctx, connect.NewRequest(&apiv1.SyncAccountRequest{AccountId: accountID}))
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			return resultProto(resp.Msg)
+		},
+	)
 }
