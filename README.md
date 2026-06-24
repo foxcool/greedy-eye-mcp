@@ -31,7 +31,7 @@ Point claude desktop/code at the built (or released) binary:
     "greedy-eye": {
       "command": "/absolute/path/to/greedy-eye-mcp",
       "env": {
-        "GREEDY_EYE_BACKEND_URL": "https://eye-dev.darkfox.info",
+        "GREEDY_EYE_BACKEND_URL": "https://your-eye-host",
         "GREEDY_EYE_AUTH_TOKEN": "psn_..."
       }
     }
@@ -58,10 +58,13 @@ All configuration is via environment variables:
 ### Minting an auth token
 
 The backend sits behind Traefik with a psina ForwardAuth middleware. Mint a
-long-lived **personal access token** in psina (`auth.v1.AuthService/CreatePersonalAccessToken`,
-authenticated with a normal access token), and put the returned `psn_...` secret
-in `GREEDY_EYE_AUTH_TOKEN`. Revoke it any time via
-`RevokePersonalAccessToken`.
+long-lived **personal access token** and put the returned `psn_...` secret in
+`GREEDY_EYE_AUTH_TOKEN`. Two ways:
+
+- **Frontend** — the `/settings` page (Access tokens) creates, lists, and revokes
+  tokens; the secret is shown once.
+- **API** — `auth.v1.AuthService/CreatePersonalAccessToken` (authenticated with a
+  normal access token); revoke via `RevokePersonalAccessToken`.
 
 ## Tools
 
