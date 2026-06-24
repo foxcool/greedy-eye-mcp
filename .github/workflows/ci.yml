@@ -1,0 +1,95 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+    tags:
+      - 'v*.*.*'
+  pull_request:
+
+jobs:
+  lint:
+    name: Lint code
+    runs-on: ubuntu-latest
+
+    steps:
+      # Sibling layout: go.mod has `replace github.com/foxcool/greedy-eye => ../greedy-eye`.
+      # Check out both repos as siblings so the replace resolves. Pinned to the version
+      # required in go.mod for reproducibility.
+      - uses: actions/checkout@v4
+        with:
+          path: greedy-eye-mcp
+      - uses: actions/checkout@v4
+        with:
+          repository: foxcool/greedy-eye
+          ref: v0.0.3
+          path: greedy-eye
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: latest
+          working-directory: greedy-eye-mcp
+
+  build-test:
+    name: Build & test
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: greedy-eye-mcp
+      - uses: actions/checkout@v4
+        with:
+          repository: foxcool/greedy-eye
+          ref: v0.0.3
+          path: greedy-eye
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '^1.25'
+
+      - name: Vet, build, test
+        working-directory: greedy-eye-mcp
+        run: |
+          go vet ./...
+          go build ./...
+          go test -v -race ./...
+
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    needs:
+      - lint
+      - build-test
+    if: startsWith(github.ref, 'refs/tags/')
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: greedy-eye-mcp
+          fetch-depth: 0
+      - uses: actions/checkout@v4
+        with:
+          repository: foxcool/greedy-eye
+          ref: v0.0.3
+          path: greedy-eye
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '^1.25'
+
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          version: latest
+          args: release --clean
+          workdir: greedy-eye-mcp
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
