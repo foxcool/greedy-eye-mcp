@@ -30,10 +30,11 @@ func New(cfg config.Config, clients *backend.Clients) *server.MCPServer {
 	registerAutomationTools(s, clients)
 
 	// Mutating tools (create/delete/execute) are opt-in. ExecuteRule can trigger
-	// real trades and withdrawals, so it stays gated behind explicit config.
-	if cfg.EnableMutations {
-		// registerMutatingTools(s, clients) // TODO: add deliberately, with care.
-	}
+	// real trades and withdrawals, so they stay gated behind cfg.EnableMutations.
+	// TODO: add deliberately, with care:
+	//   if cfg.EnableMutations {
+	//       registerMutatingTools(s, clients)
+	//   }
 
 	return s
 }
