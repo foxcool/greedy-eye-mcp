@@ -14,15 +14,15 @@ jobs:
 
     steps:
       # Sibling layout: go.mod has `replace github.com/foxcool/greedy-eye => ../greedy-eye`.
-      # Check out both repos as siblings so the replace resolves. Pinned to the version
-      # required in go.mod for reproducibility.
+      # Check out both repos as siblings so the replace resolves. Tracks greedy-eye
+      # main: the api/v1 package it imports is not yet in a published tag.
       - uses: actions/checkout@v4
         with:
           path: greedy-eye-mcp
       - uses: actions/checkout@v4
         with:
           repository: foxcool/greedy-eye
-          ref: v0.0.3
+          ref: main
           path: greedy-eye
 
       - uses: actions/setup-go@v5
@@ -46,7 +46,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: foxcool/greedy-eye
-          ref: v0.0.3
+          ref: main
           path: greedy-eye
 
       - uses: actions/setup-go@v5
@@ -78,7 +78,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: foxcool/greedy-eye
-          ref: v0.0.3
+          ref: main
           path: greedy-eye
 
       - uses: actions/setup-go@v5
