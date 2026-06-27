@@ -1,15 +1,83 @@
-name: Security Review
-
-permissions:
-  pull-requests: write  # Needed for leaving PR comments
-  contents: read
+name: Security
 
 on:
+  push:
+    branches: [ main ]
   pull_request:
 
 jobs:
-  security:
+  # Sibling layout: go.mod has `replace github.com/foxcool/greedy-eye => ../greedy-eye`.
+  # The Go scanners build the module, so they need both repos checked out as siblings.
+  govulncheck:
+    name: Scan dependencies for vulnerabilities
     runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: greedy-eye-mcp
+      - uses: actions/checkout@v4
+        with:
+          repository: foxcool/greedy-eye
+          ref: main
+          path: greedy-eye
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+
+      - name: Run govulncheck
+        working-directory: greedy-eye-mcp
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./...
+
+  gosec:
+    name: Static security analysis
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: greedy-eye-mcp
+      - uses: actions/checkout@v4
+        with:
+          repository: foxcool/greedy-eye
+          ref: main
+          path: greedy-eye
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+
+      - name: Run gosec
+        working-directory: greedy-eye-mcp
+        run: |
+          go install github.com/securego/gosec/v2/cmd/gosec@latest
+          gosec -exclude-generated ./...
+
+  gitleaks:
+    name: Scan for committed secrets
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  security-review:
+    name: Claude security review
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    permissions:
+      pull-requests: write  # Needed for leaving PR comments
+      contents: read
+
     steps:
       - uses: actions/checkout@v4
         with:
