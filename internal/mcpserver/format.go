@@ -3,6 +3,7 @@ package mcpserver
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"math/big"
 	"strings"
 	"time"
@@ -93,10 +94,17 @@ func optString(s string) *string {
 	return &s
 }
 
-// optInt32 returns a pointer to int32(i), or nil if i == 0.
+// optInt32 returns a pointer to int32(i), or nil if i == 0. The value is clamped
+// to the int32 range so an out-of-range page size can never silently overflow
+// (gosec G115).
 func optInt32(i int) *int32 {
 	if i == 0 {
 		return nil
+	}
+	if i > math.MaxInt32 {
+		i = math.MaxInt32
+	} else if i < math.MinInt32 {
+		i = math.MinInt32
 	}
 	v := int32(i)
 	return &v
