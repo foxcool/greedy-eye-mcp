@@ -100,9 +100,11 @@ container image is shipped — the server runs as a local stdio binary launched 
 the client. `make snapshot` produces the same archives locally without
 publishing.
 
-CI-driven, tag-triggered releases are blocked until the backend `api/v1` package
-is published in a tag (see the `replace` caveat in `AGENTS.md`); for now, run
-GoReleaser locally where the sibling checkout is present.
+Tag-triggered releases run in CI: the release workflow checks out `greedy-eye`
+as a sibling so the `replace => ../greedy-eye` directive resolves, then runs
+GoReleaser. This works around the backend `api/v1` package not yet being
+published in a tag (see the `replace` caveat in `AGENTS.md`). `make snapshot`
+still builds the archives locally.
 
 ## API contract
 
