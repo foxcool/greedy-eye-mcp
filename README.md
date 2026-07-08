@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/logo.svg" width="128" alt="Greedy Eye logo"></p>
+
 # greedy-eye-mcp
 
 An [MCP](https://modelcontextprotocol.io) server that exposes the greedy-eye
