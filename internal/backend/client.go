@@ -20,6 +20,7 @@ type Clients struct {
 	MarketData apiv1connect.MarketDataServiceClient
 	Portfolio  apiv1connect.PortfolioServiceClient
 	Automation apiv1connect.AutomationServiceClient
+	Analytics  apiv1connect.AnalyticsServiceClient
 }
 
 // New builds the backend clients according to the configured protocol.
@@ -35,6 +36,7 @@ func New(cfg config.Config) *Clients {
 		MarketData: apiv1connect.NewMarketDataServiceClient(httpClient, base, opts...),
 		Portfolio:  apiv1connect.NewPortfolioServiceClient(httpClient, base, opts...),
 		Automation: apiv1connect.NewAutomationServiceClient(httpClient, base, opts...),
+		Analytics:  apiv1connect.NewAnalyticsServiceClient(httpClient, base, opts...),
 	}
 }
 

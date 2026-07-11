@@ -77,6 +77,7 @@ Read-only by default. Names are namespaced with `eye_`.
 - `eye_list_portfolios`, `eye_get_portfolio`, `eye_list_holdings`
 - `eye_calculate_portfolio_value` (adds a human-readable total)
 - `eye_list_rules`, `eye_get_rule`, `eye_simulate_rule` (dry-run only)
+- `eye_get_heatmap` (portfolio treemap: value-sized, change-%-colored nodes)
 
 Money-moving operations (`ExecuteRule`, create/delete) are intentionally not
 exposed. See `AGENTS.md`.
