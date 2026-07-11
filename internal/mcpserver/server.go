@@ -28,6 +28,7 @@ func New(cfg config.Config, clients *backend.Clients) *server.MCPServer {
 	registerMarketDataTools(s, clients)
 	registerPortfolioTools(s, clients)
 	registerAutomationTools(s, clients)
+	registerAnalyticsTools(s, clients)
 
 	// Mutating tools (create/delete/execute) are opt-in. ExecuteRule can trigger
 	// real trades and withdrawals, so they stay gated behind cfg.EnableMutations.
