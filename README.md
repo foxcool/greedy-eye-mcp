@@ -74,7 +74,7 @@ Read-only by default. Names are namespaced with `eye_`.
 
 - `eye_list_assets`, `eye_get_asset`
 - `eye_get_latest_price` (adds a human-readable price), `eye_list_price_history`
-- `eye_list_portfolios`, `eye_get_portfolio`, `eye_list_holdings`
+- `eye_list_portfolios`, `eye_get_portfolio`, `eye_list_accounts`, `eye_list_holdings`
 - `eye_calculate_portfolio_value` (adds a human-readable total)
 - `eye_list_rules`, `eye_get_rule`, `eye_simulate_rule` (dry-run only)
 - `eye_get_heatmap` (portfolio treemap: value-sized, change-%-colored nodes)
@@ -89,6 +89,10 @@ With `ENABLE_MUTATIONS=true`, write tools for manual portfolio import are added:
   by repeating the call with `dry_run=false`. Re-importing the same export
   is safe (dedup by `external_id` / heuristic), and every committed row
   carries `source=llm_import` plus a shared `import_id`.
+
+The full workflow for LLM clients — parsing an export, the dry-run/confirm
+contract, verification, failure modes — is in
+[docs/importing.md](docs/importing.md).
 
 Money-moving operations (`ExecuteRule`, trading, withdrawals) are intentionally
 not exposed. See `AGENTS.md`.

@@ -54,6 +54,35 @@ func registerPortfolioTools(s *server.MCPServer, c *backend.Clients) {
 	)
 
 	s.AddTool(
+		mcp.NewTool("eye_list_accounts",
+			mcp.WithDescription("List accounts (wallets, exchanges, manual sources), optionally filtered by type. "+
+				"Secrets in account data are masked. Use this to find an existing account before creating one."),
+			mcp.WithString("type", mcp.Description("Filter by AccountType enum, e.g. ACCOUNT_TYPE_MANUAL or ACCOUNT_TYPE_WALLET.")),
+			mcp.WithNumber("page_size", mcp.Description("Max results per page."), mcp.Min(0)),
+			mcp.WithString("page_token", mcp.Description("Pagination token.")),
+		),
+		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			in := &apiv1.ListAccountsRequest{
+				PageSize:  optInt32(req.GetInt("page_size", 0)),
+				PageToken: optString(req.GetString("page_token", "")),
+			}
+			if raw := req.GetString("type", ""); raw != "" {
+				v, ok := apiv1.AccountType_value[raw]
+				if !ok {
+					return mcp.NewToolResultError("unknown account type " + raw), nil
+				}
+				t := apiv1.AccountType(v)
+				in.Type = &t
+			}
+			resp, err := c.Portfolio.ListAccounts(ctx, connect.NewRequest(in))
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			return resultProto(resp.Msg)
+		},
+	)
+
+	s.AddTool(
 		mcp.NewTool("eye_list_holdings",
 			mcp.WithDescription("List holdings, optionally filtered by portfolio, account, or asset."),
 			mcp.WithString("portfolio_id", mcp.Description("Filter by portfolio UUID.")),
