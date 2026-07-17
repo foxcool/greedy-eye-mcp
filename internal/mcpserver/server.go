@@ -15,6 +15,15 @@ const (
 	serverVersion = "0.1.0"
 )
 
+// serverInstructions is returned to the client on initialize. Keep it short:
+// the full import workflow lives in docs/importing.md.
+const serverInstructions = `greedy-eye portfolio tools. Money amounts are raw integers scaled by a
+'decimals' field unless a *_human field is present. Write tools (when enabled)
+follow a simulation-first contract: imports default to dry_run=true and return
+a per-item plan — show the plan to the user and get explicit confirmation
+before repeating the call with dry_run=false. Never invent amounts or symbols:
+ask the user when an export is ambiguous.`
+
 // New builds an MCP server and registers the tool set. The caller drives it over
 // a transport (stdio).
 func New(cfg config.Config, clients *backend.Clients) *server.MCPServer {
@@ -22,6 +31,7 @@ func New(cfg config.Config, clients *backend.Clients) *server.MCPServer {
 		serverName,
 		serverVersion,
 		server.WithToolCapabilities(true),
+		server.WithInstructions(serverInstructions),
 	)
 
 	// Read-only tools are always registered.
