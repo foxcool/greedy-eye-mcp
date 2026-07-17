@@ -55,7 +55,7 @@ All configuration is via environment variables:
 | `GREEDY_EYE_AUTH_TOKEN`   | _(empty)_                | psina personal access token, sent as `Authorization: Bearer`. Required behind psina ForwardAuth; empty for direct-to-eye dev. |
 | `BACKEND_PROTOCOL`        | `connect`                | `connect` or `grpc`.                                   |
 | `REQUEST_TIMEOUT`         | `30s`                    | Per-call timeout to the backend.                       |
-| `ENABLE_MUTATIONS`        | `false`                  | Gate for write/execute tools (none implemented yet).   |
+| `ENABLE_MUTATIONS`        | `false`                  | Gate for write tools (manual accounts + batch import). |
 
 ### Minting an auth token
 
@@ -79,8 +79,19 @@ Read-only by default. Names are namespaced with `eye_`.
 - `eye_list_rules`, `eye_get_rule`, `eye_simulate_rule` (dry-run only)
 - `eye_get_heatmap` (portfolio treemap: value-sized, change-%-colored nodes)
 
-Money-moving operations (`ExecuteRule`, create/delete) are intentionally not
-exposed. See `AGENTS.md`.
+With `ENABLE_MUTATIONS=true`, write tools for manual portfolio import are added:
+
+- `eye_create_manual_account` — account without a connector; positions enter by hand or import
+- `eye_find_or_create_asset` — find-first asset resolution by (symbol, market, type)
+- `eye_import_positions`, `eye_import_transactions` — batch import with a
+  simulation-first contract: `dry_run` defaults to **true** and returns a
+  per-item plan (create/update/skip); commit only after the user confirms,
+  by repeating the call with `dry_run=false`. Re-importing the same export
+  is safe (dedup by `external_id` / heuristic), and every committed row
+  carries `source=llm_import` plus a shared `import_id`.
+
+Money-moving operations (`ExecuteRule`, trading, withdrawals) are intentionally
+not exposed. See `AGENTS.md`.
 
 ## Why a proxy, and why Go
 

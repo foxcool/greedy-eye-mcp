@@ -30,12 +30,12 @@ func New(cfg config.Config, clients *backend.Clients) *server.MCPServer {
 	registerAutomationTools(s, clients)
 	registerAnalyticsTools(s, clients)
 
-	// Mutating tools (create/delete/execute) are opt-in. ExecuteRule can trigger
-	// real trades and withdrawals, so they stay gated behind cfg.EnableMutations.
-	// TODO: add deliberately, with care:
-	//   if cfg.EnableMutations {
-	//       registerMutatingTools(s, clients)
-	//   }
+	// Mutating tools are opt-in: they write accounts, assets, holdings, and
+	// transaction history. Import tools default to dry_run=true; committing
+	// requires an explicit dry_run=false after the plan is confirmed.
+	if cfg.EnableMutations {
+		registerMutatingTools(s, clients)
+	}
 
 	return s
 }
