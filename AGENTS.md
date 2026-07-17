@@ -51,12 +51,17 @@ make bootstrap   # tidy + build
 
 ## Safety: mutating tools are gated
 
-Only read-only / non-mutating tools are registered by default. Create, delete,
-and especially `ExecuteRule` (which can trigger real trades and withdrawals) are
-NOT exposed. They are gated behind `ENABLE_MUTATIONS=true` and a deliberate
-`registerMutatingTools` implementation that does not yet exist. Do not expose
-money-moving operations to an LLM surface without explicit confirmation
-semantics.
+Only read-only / non-mutating tools are registered by default.
+`ENABLE_MUTATIONS=true` adds the manual-import write tools
+(`eye_create_manual_account`, `eye_find_or_create_asset`,
+`eye_import_positions`, `eye_import_transactions` — see
+`internal/mcpserver/mutating.go`). Their contract is simulation-first: import
+tools default to `dry_run=true`, and the plan must be confirmed by the user
+before a commit call with `dry_run=false`.
+
+`ExecuteRule` and anything else that can trigger real trades or withdrawals is
+NOT exposed regardless of the flag. Do not expose money-moving operations to an
+LLM surface without explicit confirmation semantics.
 
 ## Distribution
 
