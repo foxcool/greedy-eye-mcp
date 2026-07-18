@@ -92,6 +92,25 @@ the same export is safe: duplicates come back as SKIP.
   funds, structured products) contribute nothing to the total until a price
   point exists — say so instead of hunting for a fake price.
 
+## Reconciling against a fresh export
+
+When the user brings a *new* export for an account that was already imported,
+do not just re-import: reconcile. Pass `full_snapshot=true` to
+`eye_import_positions` — the batch is then treated as the complete position
+list for the account:
+
+- positions in the export behave as usual (create / update / skip);
+- holdings **absent** from the export are planned as `IMPORT_ACTION_DELETE`
+  with their symbol and previous amount, and closed on commit;
+- holdings the user explicitly excluded are never touched;
+- if *any* item fails to parse, deletions are suppressed for the whole call
+  (`deletions_suppressed=true`) — fix the batch first, a partial parse must
+  not close real positions.
+
+Deletions are destructive: list them separately in the plan you show the
+user ("these 3 positions are gone from the export and will be closed") and
+get explicit confirmation before the commit call.
+
 ## Failure modes
 
 | symptom | meaning |

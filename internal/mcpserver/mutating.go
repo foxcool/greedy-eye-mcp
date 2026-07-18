@@ -106,7 +106,11 @@ func registerMutatingTools(s *server.MCPServer, c *backend.Clients) {
 				"ALWAYS call with dry_run=true first, show the returned plan (create/update/skip per item, "+
 				"assets to be created) to the user, and only after explicit confirmation repeat the exact "+
 				"same call with dry_run=false. One holding per (account, asset): existing holdings get their "+
-				"amount refreshed, new ones are created with source=llm_import and the batch import_id."),
+				"amount refreshed, new ones are created with source=llm_import and the batch import_id. "+
+				"With full_snapshot=true the batch is treated as the COMPLETE position list: holdings "+
+				"absent from it are planned as DELETE and closed on commit (excluded holdings are never "+
+				"touched; deletions are suppressed when any item fails). Use full_snapshot to reconcile "+
+				"an account against a fresh export."),
 			mcp.WithString("account_id", mcp.Required(), mcp.Description("Manual account UUID.")),
 			mcp.WithString("positions", mcp.Required(), mcp.Description(
 				`JSON array of position items: [{"symbol":"BTC","amount":"0.5"}, ...]. Fields: `+
@@ -115,6 +119,7 @@ func registerMutatingTools(s *server.MCPServer, c *backend.Clients) {
 					`name (optional, used if the asset is created), decimals (optional storage scale, default 8).`)),
 			mcp.WithBoolean("dry_run", mcp.Description("Plan without writing. Defaults to true — pass false only to commit a confirmed plan.")),
 			mcp.WithString("import_id", mcp.Description("Batch UUID; pass the same value on the commit call to keep one id for the whole import.")),
+			mcp.WithBoolean("full_snapshot", mcp.Description("Reconcile mode: positions is the complete list for the account; absent holdings get closed. Confirm deletions with the user explicitly.")),
 		),
 		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			accountID, err := req.RequireString("account_id")
@@ -130,10 +135,11 @@ func registerMutatingTools(s *server.MCPServer, c *backend.Clients) {
 				return mcp.NewToolResultError(fmt.Sprintf("positions: %v", err)), nil
 			}
 			in := &apiv1.ImportPositionsRequest{
-				AccountId: accountID,
-				Positions: positions,
-				DryRun:    req.GetBool("dry_run", true), // default to the safe path
-				ImportId:  optString(req.GetString("import_id", "")),
+				AccountId:    accountID,
+				Positions:    positions,
+				DryRun:       req.GetBool("dry_run", true), // default to the safe path
+				ImportId:     optString(req.GetString("import_id", "")),
+				FullSnapshot: req.GetBool("full_snapshot", false),
 			}
 			resp, err := c.Portfolio.ImportPositions(ctx, connect.NewRequest(in))
 			if err != nil {
