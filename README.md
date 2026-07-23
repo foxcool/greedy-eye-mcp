@@ -72,7 +72,7 @@ long-lived **personal access token** and put the returned `psn_...` secret in
 
 Read-only by default. Names are namespaced with `eye_`.
 
-- `eye_list_assets`, `eye_get_asset`
+- `eye_list_assets` (filter by `identity_verdict` to review the scam-filter quarantine), `eye_get_asset`
 - `eye_get_latest_price` (adds a human-readable price), `eye_list_price_history`
 - `eye_list_portfolios`, `eye_get_portfolio`, `eye_list_accounts`, `eye_list_holdings`
 - `eye_calculate_portfolio_value` (adds a human-readable total)

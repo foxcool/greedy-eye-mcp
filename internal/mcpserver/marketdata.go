@@ -20,12 +20,16 @@ func registerMarketDataTools(s *server.MCPServer, c *backend.Clients) {
 			mcp.WithArray("tags", mcp.Description("Filter by tags (all must match)."), mcp.WithStringItems()),
 			mcp.WithNumber("page_size", mcp.Description("Max results per page."), mcp.Min(0)),
 			mcp.WithString("page_token", mcp.Description("Pagination token from a previous response.")),
+			mcp.WithString("identity_verdict",
+				mcp.Description("Filter by scam-filtering identity verdict: unknown | legit | suspect | scam | impersonation. Use scam/impersonation/suspect to review the quarantine."),
+				mcp.Enum("unknown", "legit", "suspect", "scam", "impersonation")),
 		),
 		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			in := &apiv1.ListAssetsRequest{
-				Tags:      req.GetStringSlice("tags", nil),
-				PageSize:  optInt32(req.GetInt("page_size", 0)),
-				PageToken: optString(req.GetString("page_token", "")),
+				Tags:            req.GetStringSlice("tags", nil),
+				PageSize:        optInt32(req.GetInt("page_size", 0)),
+				PageToken:       optString(req.GetString("page_token", "")),
+				IdentityVerdict: optString(req.GetString("identity_verdict", "")),
 			}
 			resp, err := c.MarketData.ListAssets(ctx, connect.NewRequest(in))
 			if err != nil {
