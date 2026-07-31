@@ -57,7 +57,8 @@ func registerPortfolioTools(s *server.MCPServer, c *backend.Clients) {
 		mcp.NewTool("eye_list_accounts",
 			mcp.WithDescription("List accounts (wallets, exchanges, manual sources), optionally filtered by type. "+
 				"Secrets in account data are masked. Use this to find an existing account before creating one."),
-			mcp.WithString("type", mcp.Description("Filter by AccountType enum, e.g. ACCOUNT_TYPE_MANUAL or ACCOUNT_TYPE_WALLET.")),
+			mcp.WithString("type", mcp.Description("Filter by account type, e.g. manual or wallet."),
+				mcp.Enum("", "wallet", "exchange", "bank", "broker", "service", "manual")),
 			mcp.WithNumber("page_size", mcp.Description("Max results per page."), mcp.Min(0)),
 			mcp.WithString("page_token", mcp.Description("Pagination token.")),
 		),
@@ -67,11 +68,11 @@ func registerPortfolioTools(s *server.MCPServer, c *backend.Clients) {
 				PageToken: optString(req.GetString("page_token", "")),
 			}
 			if raw := req.GetString("type", ""); raw != "" {
-				v, ok := apiv1.AccountType_value[raw]
-				if !ok {
-					return mcp.NewToolResultError("unknown account type " + raw), nil
+				t, err := enumValue[apiv1.AccountType](
+					apiv1.AccountType_ACCOUNT_TYPE_UNSPECIFIED.Descriptor(), "type", raw)
+				if err != nil {
+					return mcp.NewToolResultError(err.Error()), nil
 				}
-				t := apiv1.AccountType(v)
 				in.Type = &t
 			}
 			resp, err := c.Portfolio.ListAccounts(ctx, connect.NewRequest(in))

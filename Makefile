@@ -1,4 +1,4 @@
-.PHONY: help bootstrap tidy build run snapshot release clean
+.PHONY: help bootstrap tidy build test run snapshot release clean
 
 BIN := bin/server
 
@@ -13,6 +13,9 @@ tidy: ## Resolve and pin module dependencies
 
 build: ## Build the server binary into bin/
 	go build -trimpath -o $(BIN) ./cmd/server
+
+test: ## Run unit tests
+	go test ./...
 
 run: ## Run the server locally
 	go run ./cmd/server

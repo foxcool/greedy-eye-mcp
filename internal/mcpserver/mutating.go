@@ -28,6 +28,10 @@ func parseProtoArray[T proto.Message](raw string, mk func() T) ([]T, error) {
 	items := make([]T, 0, len(elems))
 	for i, e := range elems {
 		msg := mk()
+		e, err := normalizeEnumFields(msg.ProtoReflect().Descriptor(), e)
+		if err != nil {
+			return nil, fmt.Errorf("item %d: %w", i, err)
+		}
 		if err := protoJSONIn.Unmarshal(e, msg); err != nil {
 			return nil, fmt.Errorf("item %d: %w", i, err)
 		}
@@ -73,10 +77,15 @@ func registerMutatingTools(s *server.MCPServer, c *backend.Clients) {
 		mcp.NewTool("eye_find_or_create_asset",
 			mcp.WithDescription("Resolve an asset by (symbol, market, type), creating it only when nothing "+
 				"matches and dry_run is false. Find-first: always prefer an existing asset over creating "+
-				"a duplicate. Market defaults by type (crypto/forex); required for stocks, bonds, funds."),
+				"a duplicate. Market is implied only for cryptocurrency (crypto) and forex (forex); for "+
+				"stock, bond, fund and commodity it is required, and it is validated before the lookup — "+
+				"so it must be passed even when the asset already exists."),
 			mcp.WithString("symbol", mcp.Required(), mcp.Description("Ticker symbol, e.g. BTC or AAPL.")),
-			mcp.WithString("market", mcp.Description("Listing market: crypto, forex, nasdaq, moex, ...")),
-			mcp.WithString("type", mcp.Description("Asset type enum, e.g. ASSET_TYPE_STOCK. Defaults to ASSET_TYPE_CRYPTOCURRENCY.")),
+			mcp.WithString("market", mcp.Description("Listing market: crypto, forex, nasdaq, moex, spbex, ... "+
+				"Optional for cryptocurrency and forex, required for every other type.")),
+			mcp.WithString("type", mcp.Description("Asset type; defaults to cryptocurrency. ETF is an alias for fund: "+
+				"the exchange-traded part is carried by market."),
+				mcp.Enum("", "cryptocurrency", "stock", "bond", "commodity", "forex", "fund", "etf")),
 			mcp.WithString("name", mcp.Description("Asset name when created; defaults to the symbol.")),
 			mcp.WithBoolean("dry_run", mcp.Description("When true, only reports whether the asset exists or would be created.")),
 		),
@@ -85,10 +94,15 @@ func registerMutatingTools(s *server.MCPServer, c *backend.Clients) {
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
+			assetType, err := enumValue[apiv1.AssetType](
+				apiv1.AssetType_ASSET_TYPE_UNSPECIFIED.Descriptor(), "type", req.GetString("type", ""))
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
 			in := &apiv1.FindOrCreateAssetRequest{
 				Symbol: symbol,
 				Market: optString(req.GetString("market", "")),
-				Type:   apiv1.AssetType(apiv1.AssetType_value[req.GetString("type", "")]),
+				Type:   assetType,
 				Name:   optString(req.GetString("name", "")),
 				DryRun: req.GetBool("dry_run", false),
 			}
@@ -115,7 +129,9 @@ func registerMutatingTools(s *server.MCPServer, c *backend.Clients) {
 			mcp.WithString("positions", mcp.Required(), mcp.Description(
 				`JSON array of position items: [{"symbol":"BTC","amount":"0.5"}, ...]. Fields: `+
 					`symbol (or asset_id), amount (decimal string in asset units), `+
-					`market (optional; crypto/forex/nasdaq/moex), asset_type (optional enum, default cryptocurrency), `+
+					`asset_type (cryptocurrency|stock|bond|commodity|forex|fund, etf aliases fund; default cryptocurrency), `+
+					`market (listing venue: crypto, forex, nasdaq, moex, spbex, ...; optional only for cryptocurrency `+
+					`and forex, REQUIRED for stock, bond, fund and commodity — including when the asset already exists), `+
 					`name (optional, used if the asset is created), decimals (optional storage scale, default 8).`)),
 			mcp.WithBoolean("dry_run", mcp.Description("Plan without writing. Defaults to true — pass false only to commit a confirmed plan.")),
 			mcp.WithString("import_id", mcp.Description("Batch UUID; pass the same value on the commit call to keep one id for the whole import.")),
@@ -157,9 +173,10 @@ func registerMutatingTools(s *server.MCPServer, c *backend.Clients) {
 				"export is safe. Never creates assets: unknown symbols fail per item."),
 			mcp.WithString("account_id", mcp.Required(), mcp.Description("Manual account UUID.")),
 			mcp.WithString("transactions", mcp.Required(), mcp.Description(
-				`JSON array of transaction items: [{"type":"TRANSACTION_TYPE_DEPOSIT","symbol":"BTC",`+
+				`JSON array of transaction items: [{"type":"deposit","symbol":"BTC",`+
 					`"external_id":"tx-1","data":{"date":"2026-07-01","amount":"0.1"}}, ...]. Fields: `+
-					`type (TransactionType enum, required), status (optional, default completed), `+
+					`type (required: trade|transfer|deposit|withdrawal|extended), `+
+					`status (optional: pending|processing|completed|failed|cancelled, default completed), `+
 					`symbol or asset_id (optional), external_id (optional dedup key), data (optional string map; `+
 					`use date and amount keys to enable heuristic dedup).`)),
 			mcp.WithBoolean("dry_run", mcp.Description("Plan without writing. Defaults to true — pass false only to commit a confirmed plan.")),
