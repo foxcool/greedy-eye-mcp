@@ -18,20 +18,22 @@ read tools are registered).
 3. **Amounts are decimal strings** in asset units (`"0.5"` = half a BTC), not
    floats and not raw scaled integers. Keep full precision from the source.
 4. **One manual account per real-world source** (a broker, a bank, one cold
-   wallet). Check `eye_list_accounts` with `type=ACCOUNT_TYPE_MANUAL` before
-   creating a new one.
+   wallet). Check `eye_list_accounts` with `type=manual` before creating a
+   new one.
 5. **Find assets before creating them.** `eye_find_or_create_asset` is
-   find-first; for non-crypto always pass `market` (`nasdaq`, `moex`, ...)
-   and the correct `type` (`ASSET_TYPE_STOCK`, `ASSET_TYPE_BOND`, ...).
-   Crypto defaults to the single global `crypto` market.
+   find-first; for `stock`, `bond`, `fund` and `commodity` always pass
+   `market` (`nasdaq`, `moex`, `spbex`, ...) and the correct `type`.
+   Only `cryptocurrency` (`crypto`) and `forex` (`forex`) imply a market;
+   everything else is rejected without one, *including when the asset
+   already exists* — market is validated before the lookup.
 
 ## Workflow
 
 ### 1. Identify the source and the account
 
 - Ask the user what the export is from if it is not obvious.
-- `eye_list_accounts` (`type=ACCOUNT_TYPE_MANUAL`) — reuse an existing
-  account for this source if there is one.
+- `eye_list_accounts` (`type=manual`) — reuse an existing account for this
+  source if there is one.
 - Otherwise `eye_create_manual_account` with a recognizable name
   ("IB broker", "cold BTC"), optionally a `portfolio_id` so imported
   holdings join a portfolio by default.
@@ -44,8 +46,8 @@ Normalize each position row to:
 |---|---|
 | `symbol` | ticker as listed; do not guess close matches |
 | `amount` | decimal string in asset units, full precision |
-| `market` | required for non-crypto: `nasdaq`, `moex`, ... |
-| `asset_type` | `ASSET_TYPE_STOCK`, `ASSET_TYPE_BOND`, `ASSET_TYPE_FUND`, ...; omit for crypto |
+| `market` | required for stock, bond, fund, commodity: `nasdaq`, `moex`, `spbex`, ... |
+| `asset_type` | `stock`, `bond`, `fund`, `commodity`, `forex`; `etf` is an alias for `fund`; omit for crypto |
 | `name` | human name from the export; used only if the asset gets created |
 
 PDF and screenshots parse worse than CSV: when confidence in a row is low,
@@ -117,6 +119,8 @@ get explicit confirmation before the commit call.
 |---|---|
 | `failed_precondition: batch import requires a manual account` | target account is a wallet/exchange — imports only go to manual accounts |
 | `symbol X is ambiguous across markets` | pass `market` explicitly |
+| `invalid value "equity" for asset_type: expected one of ...` | the error lists every accepted value — pass one of them; short forms (`fund`), full names (`ASSET_TYPE_FUND`) and the `etf` alias all work |
+| `invalid_argument: market is required for this asset type` | non-crypto asset without `market`; required even when the asset already exists |
 | item error `asset X not found` (transactions) | import positions first or create the asset explicitly |
 | item error `duplicate asset in batch` | the export lists one asset twice — merge rows before importing |
 | item error about fractional digits | raise the item's `decimals` (default 8) to fit the amount's precision |
