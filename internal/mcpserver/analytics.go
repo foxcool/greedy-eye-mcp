@@ -18,7 +18,10 @@ func registerAnalyticsTools(s *server.MCPServer, c *backend.Clients) {
 		mcp.NewTool("eye_get_heatmap",
 			mcp.WithDescription("Portfolio heatmap: treemap nodes where size = holding value in the "+
 				"quote asset and color_value = price change % over the window. Group nodes (empty "+
-				"parent_id, no asset_id) aggregate their children."),
+				"parent_id, no asset_id) aggregate their children. "+
+				"The map draws PRICED holdings only: a position with no usable quote produces no "+
+				"node at all rather than a small one, so the nodes are not the whole portfolio. "+
+				"What is missing is in `coverage` / `coverage_note`; report it alongside the map."),
 			mcp.WithString("portfolio_id", mcp.Required(), mcp.Description("Portfolio UUID (heatmap scope).")),
 			mcp.WithString("group_by", mcp.Description("Grouping axis: 'account' or empty for a flat map."),
 				mcp.Enum("", "account")),
@@ -61,7 +64,9 @@ func registerAnalyticsTools(s *server.MCPServer, c *backend.Clients) {
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			return resultProto(resp.Msg)
+			return resultProtoWith(resp.Msg, map[string]any{
+				"coverage_note": coverageNote(resp.Msg.GetCoverage()),
+			})
 		},
 	)
 }

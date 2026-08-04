@@ -90,7 +90,10 @@ the same export is safe: duplicates come back as SKIP.
 - `eye_calculate_portfolio_value` — sanity-check the total against the
   export's own total, if it has one. Assets without a price feed (pension
   funds, structured products) contribute nothing to the total until a price
-  point exists — say so instead of hunting for a fake price.
+  point exists — say so instead of hunting for a fake price. The response
+  names them: `coverage` counts the priced and unpriced holdings and lists the
+  latter with a reason, and `coverage_note` says it in words. A gap between the
+  export's total and this one is usually that list, not a lost position.
 
 ## Reconciling against a fresh export
 

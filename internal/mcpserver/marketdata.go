@@ -2,7 +2,6 @@ package mcpserver
 
 import (
 	"context"
-	"encoding/json"
 
 	"connectrpc.com/connect"
 	"github.com/mark3labs/mcp-go/mcp"
@@ -85,14 +84,9 @@ func registerMarketDataTools(s *server.MCPServer, c *backend.Clients) {
 			}
 
 			price := resp.Msg
-			raw, mErr := protoJSON.Marshal(price)
-			if mErr != nil {
-				return resultProto(price)
-			}
-			var m map[string]any
-			_ = json.Unmarshal(raw, &m)
-			m["last_human"] = scaledDecimal(price.GetLast(), price.GetDecimals())
-			return resultJSON(m)
+			return resultProtoWith(price, map[string]any{
+				"last_human": scaledDecimal(price.GetLast(), price.GetDecimals()),
+			})
 		},
 	)
 

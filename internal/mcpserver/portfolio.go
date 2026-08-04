@@ -2,7 +2,6 @@ package mcpserver
 
 import (
 	"context"
-	"encoding/json"
 
 	"connectrpc.com/connect"
 	"github.com/mark3labs/mcp-go/mcp"
@@ -111,7 +110,10 @@ func registerPortfolioTools(s *server.MCPServer, c *backend.Clients) {
 		mcp.NewTool("eye_calculate_portfolio_value",
 			mcp.WithDescription("Compute the total value of a portfolio in a quote currency. "+
 				"Read-only: it values holdings, it does not change anything. "+
-				"Adds a human-readable total alongside the raw scaled integer."),
+				"Adds a human-readable total alongside the raw scaled integer. "+
+				"The total covers PRICED holdings only: positions with no usable quote stay out of "+
+				"it and are reported in `coverage` / `coverage_note`. Quote the total together with "+
+				"that coverage — a total presented alone reads as the whole portfolio."),
 			mcp.WithString("portfolio_id", mcp.Required(), mcp.Description("Portfolio UUID.")),
 			mcp.WithString("quote_asset_id", mcp.Description("Quote currency: asset UUID or ticker (e.g. USD). Defaults to USD.")),
 		),
@@ -130,14 +132,10 @@ func registerPortfolioTools(s *server.MCPServer, c *backend.Clients) {
 			}
 
 			val := resp.Msg
-			raw, mErr := protoJSON.Marshal(val)
-			if mErr != nil {
-				return resultProto(val)
-			}
-			var m map[string]any
-			_ = json.Unmarshal(raw, &m)
-			m["total_value_human"] = scaledDecimal(val.GetTotalValueAmount(), val.GetDecimals())
-			return resultJSON(m)
+			return resultProtoWith(val, map[string]any{
+				"total_value_human": scaledDecimal(val.GetTotalValueAmount(), val.GetDecimals()),
+				"coverage_note":     coverageNote(val.GetCoverage()),
+			})
 		},
 	)
 
