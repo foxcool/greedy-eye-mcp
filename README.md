@@ -75,9 +75,16 @@ Read-only by default. Names are namespaced with `eye_`.
 - `eye_list_assets` (filter by `identity_verdict` to review the scam-filter quarantine), `eye_get_asset`
 - `eye_get_latest_price` (adds a human-readable price), `eye_list_price_history`
 - `eye_list_portfolios`, `eye_get_portfolio`, `eye_list_accounts`, `eye_list_holdings`
-- `eye_calculate_portfolio_value` (adds a human-readable total)
+- `eye_calculate_portfolio_value` (adds a human-readable total and a `coverage_note`)
 - `eye_list_rules`, `eye_get_rule`, `eye_simulate_rule` (dry-run only)
 - `eye_get_heatmap` (portfolio treemap: value-sized, change-%-colored nodes)
+
+Both valuation tools cover **priced holdings only**: a position with no usable
+quote stays out of the total and draws no tile. They report what is missing in
+`coverage` (counts plus a capped list, with a reason per holding) and restate it
+in plain words in `coverage_note`, so an assistant summarising the result
+qualifies the number instead of presenting a partial total as the whole
+portfolio.
 
 With `ENABLE_MUTATIONS=true`, write tools for manual portfolio import are added:
 

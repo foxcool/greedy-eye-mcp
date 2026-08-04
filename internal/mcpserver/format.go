@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
+	apiv1 "github.com/foxcool/greedy-eye/api/v1"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -29,6 +30,74 @@ func resultProto(msg proto.Message) (*mcp.CallToolResult, error) {
 		return mcp.NewToolResultError(fmt.Sprintf("failed to encode response: %v", err)), nil
 	}
 	return mcp.NewToolResultText(string(b)), nil
+}
+
+// resultProtoWith marshals a protobuf response and adds derived fields to the
+// top level of the JSON object — a human-readable total, a coverage sentence.
+// A field the model has to compute for itself is a field it reports wrong.
+//
+// Falls back to the plain proto rendering if either encoding step fails: the
+// response itself is worth more than the enrichment.
+func resultProtoWith(msg proto.Message, extra map[string]any) (*mcp.CallToolResult, error) {
+	raw, err := protoJSON.Marshal(msg)
+	if err != nil {
+		return resultProto(msg)
+	}
+	var m map[string]any
+	if err := json.Unmarshal(raw, &m); err != nil {
+		return resultProto(msg)
+	}
+	for k, v := range extra {
+		if s, ok := v.(string); ok && s == "" {
+			continue
+		}
+		m[k] = v
+	}
+	return resultJSON(m)
+}
+
+// coverageNote states, in words, how much of a valuation actually had prices
+// behind it.
+//
+// The counts are in the response already, but a number in a nested JSON field is
+// easy to summarise past: an assistant reading `total_value` reports a total,
+// and if part of the portfolio silently stayed out of it, the user hears a
+// complete answer to a question that was only partly answered. The sentence
+// exists to make that impossible to miss, and it says what to do about it.
+//
+// The reason breakdown counts only the disclosed sample, which is capped, so it
+// is worded as a sample rather than as a total.
+func coverageNote(cov *apiv1.ValuationCoverage) string {
+	if cov == nil {
+		return ""
+	}
+	if cov.GetUnpricedCount() == 0 {
+		if cov.GetPricedCount() == 0 {
+			return "No holdings in scope: this result values nothing."
+		}
+		return fmt.Sprintf("Coverage: all %d holdings were priced; nothing is missing from this result.",
+			cov.GetPricedCount())
+	}
+
+	var noQuote, thin int
+	for _, u := range cov.GetUnpriced() {
+		switch u.GetReason() {
+		case apiv1.UnpricedReason_UNPRICED_REASON_THIN_MARKET:
+			thin++
+		default:
+			noQuote++
+		}
+	}
+	reasons := fmt.Sprintf("%d of the %d listed have no quote at all, %d have a quote with no market behind it",
+		noQuote, len(cov.GetUnpriced()), thin)
+	if cov.GetUnpricedTruncated() {
+		reasons += "; the list is a capped sample of a larger set"
+	}
+
+	return fmt.Sprintf(
+		"Coverage: %d of %d holdings priced. %d holding(s) are NOT included — %s. "+
+			"Any total from this result covers priced holdings only; say so when reporting it.",
+		cov.GetPricedCount(), cov.GetPricedCount()+cov.GetUnpricedCount(), cov.GetUnpricedCount(), reasons)
 }
 
 // resultJSON marshals an arbitrary value (typically an enriched map) into a result.
