@@ -4,7 +4,7 @@ go 1.26.5
 
 require (
 	connectrpc.com/connect v1.19.1
-	github.com/foxcool/greedy-eye v0.3.0
+	github.com/foxcool/greedy-eye v0.4.1
 	github.com/mark3labs/mcp-go v0.54.1
 	golang.org/x/net v0.57.0
 	google.golang.org/protobuf v1.36.11
@@ -19,7 +19,3 @@ require (
 	golang.org/x/text v0.40.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260128011058-8636f8732409 // indirect
 )
-
-// Local sibling checkout: the api/v1 package was moved out of internal/ but is
-// not yet published in a tag. Works offline, no GOPRIVATE needed.
-replace github.com/foxcool/greedy-eye => ../greedy-eye
