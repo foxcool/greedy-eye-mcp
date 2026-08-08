@@ -19,10 +19,12 @@ const (
 // the full import workflow lives in docs/importing.md.
 const serverInstructions = `greedy-eye portfolio tools. Money amounts are raw integers scaled by a
 'decimals' field unless a *_human field is present. Write tools (when enabled)
-follow a simulation-first contract: imports default to dry_run=true and return
-a per-item plan — show the plan to the user and get explicit confirmation
-before repeating the call with dry_run=false. Never invent amounts or symbols:
-ask the user when an export is ambiguous.`
+follow a simulation-first contract: they default to dry_run=true and return a
+plan — show the plan to the user and get explicit confirmation before repeating
+the call with dry_run=false. Never invent amounts or symbols: ask the user when
+an export is ambiguous. When a total looks wrong, suspect identity before
+arithmetic: eye_get_asset reports the bindings and signals behind an asset, and
+the triage tools repair them.`
 
 // New builds an MCP server and registers the tool set. The caller drives it over
 // a transport (stdio).
@@ -41,10 +43,13 @@ func New(cfg config.Config, clients *backend.Clients) *server.MCPServer {
 	registerAnalyticsTools(s, clients)
 
 	// Mutating tools are opt-in: they write accounts, assets, holdings, and
-	// transaction history. Import tools default to dry_run=true; committing
-	// requires an explicit dry_run=false after the plan is confirmed.
+	// transaction history, and they repair catalogue identity. Everything that
+	// can destroy or hide existing data — the imports and all three triage
+	// tools — defaults to dry_run=true and commits only on an explicit
+	// dry_run=false after the plan is confirmed.
 	if cfg.EnableMutations {
 		registerMutatingTools(s, clients)
+		registerTriageTools(s, clients)
 	}
 
 	return s
