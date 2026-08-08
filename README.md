@@ -55,7 +55,7 @@ All configuration is via environment variables:
 | `GREEDY_EYE_AUTH_TOKEN`   | _(empty)_                | psina personal access token, sent as `Authorization: Bearer`. Required behind psina ForwardAuth; empty for direct-to-eye dev. |
 | `BACKEND_PROTOCOL`        | `connect`                | `connect` or `grpc`.                                   |
 | `REQUEST_TIMEOUT`         | `30s`                    | Per-call timeout to the backend.                       |
-| `ENABLE_MUTATIONS`        | `false`                  | Gate for write tools (manual accounts + batch import). |
+| `ENABLE_MUTATIONS`        | `false`                  | Gate for write tools (manual accounts, batch import, asset triage). |
 
 ### Minting an auth token
 
@@ -100,6 +100,23 @@ With `ENABLE_MUTATIONS=true`, write tools for manual portfolio import are added:
 The full workflow for LLM clients — parsing an export, the dry-run/confirm
 contract, verification, failure modes — is in
 [docs/importing.md](docs/importing.md).
+
+The same gate adds the **asset triage** tools, for acting on an identity error
+rather than only reading one. All three plan under `dry_run=true` by default:
+
+- `eye_unbind_asset_ref` — detach a contract bound to an asset it is not. The
+  repair for a counterfeit that merged into a real ticker and inherited its
+  price. Frees the contract; the total only changes after `eye_sync_account`.
+- `eye_set_asset_verdict` — set the identity verdict by hand. Terminal against
+  rescoring; `scam` and `impersonation` take every holding of the asset out of
+  every total.
+- `eye_delete_holding` — drop one row. Says so when the row came from sync and
+  the next sync will write it back.
+
+Unbinding and a verdict are deliberately separate actions. A verdict subtracts
+the whole asset everywhere; unbinding says one contract is not that asset and
+leaves the genuine one alone. Offering them as one control would either hide
+real money or leave counterfeit money counted.
 
 Money-moving operations (`ExecuteRule`, trading, withdrawals) are intentionally
 not exposed. See `AGENTS.md`.
