@@ -4,7 +4,7 @@ go 1.26.5
 
 require (
 	connectrpc.com/connect v1.19.1
-	github.com/foxcool/greedy-eye v0.4.1
+	github.com/foxcool/greedy-eye v0.4.2
 	github.com/mark3labs/mcp-go v0.54.1
 	golang.org/x/net v0.57.0
 	google.golang.org/protobuf v1.36.11
