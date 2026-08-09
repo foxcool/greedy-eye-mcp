@@ -197,12 +197,22 @@ func age(t time.Time) string {
 	case d < 0:
 		return "in the future"
 	case d < time.Hour:
-		return fmt.Sprintf("%d minutes ago", int(d.Minutes()))
+		return plural(int(d.Minutes()), "minute") + " ago"
 	case d < 48*time.Hour:
-		return fmt.Sprintf("%d hours ago", int(d.Hours()))
+		return plural(int(d.Hours()), "hour") + " ago"
 	default:
-		return fmt.Sprintf("%d days ago", int(d.Hours()/24))
+		return plural(int(d.Hours()/24), "day") + " ago"
 	}
+}
+
+// plural renders a count with its unit, singular at one. The sentence this
+// feeds is meant to be quoted verbatim by a model, and "1 hours ago" reads as
+// output rather than as a statement someone stands behind.
+func plural(n int, unit string) string {
+	if n == 1 {
+		return "1 " + unit
+	}
+	return fmt.Sprintf("%d %ss", n, unit)
 }
 
 // resultJSON marshals an arbitrary value (typically an enriched map) into a result.
