@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mark3labs/mcp-go/mcp"
 	apiv1 "github.com/foxcool/greedy-eye/api/v1"
+	"github.com/mark3labs/mcp-go/mcp"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -56,8 +56,12 @@ func resultProtoWith(msg proto.Message, extra map[string]any) (*mcp.CallToolResu
 	return resultJSON(m)
 }
 
+// now is the clock the note dates itself against. A package variable so tests
+// can pin it: an age rendered from the real clock is untestable.
+var now = time.Now
+
 // coverageNote states, in words, how much of a valuation actually had prices
-// behind it.
+// behind it and how much of it rests on prices that have gone quiet.
 //
 // The counts are in the response already, but a number in a nested JSON field is
 // easy to summarise past: an assistant reading `total_value` reports a total,
@@ -65,39 +69,140 @@ func resultProtoWith(msg proto.Message, extra map[string]any) (*mcp.CallToolResu
 // complete answer to a question that was only partly answered. The sentence
 // exists to make that impossible to miss, and it says what to do about it.
 //
+// Two kinds of doubt live here and they must never read as one. Unpriced
+// holdings are OUT of the total: naming them tells the reader the total is
+// short. Stale ones are IN it: they are named because the quote behind them is
+// old, not because it is absent, and a reader who confuses the two subtracts
+// the same doubt twice. Hence the explicit OUT/IN wording.
+//
+// Both dates are spoken whenever they exist, for the same reason: an unmentioned
+// date reads as "current", and prices and quantities go stale independently.
+//
 // The reason breakdown counts only the disclosed sample, which is capped, so it
 // is worded as a sample rather than as a total.
 func coverageNote(cov *apiv1.ValuationCoverage) string {
 	if cov == nil {
 		return ""
 	}
-	if cov.GetUnpricedCount() == 0 {
-		if cov.GetPricedCount() == 0 {
-			return "No holdings in scope: this result values nothing."
-		}
-		return fmt.Sprintf("Coverage: all %d holdings were priced; nothing is missing from this result.",
-			cov.GetPricedCount())
+	if cov.GetUnpricedCount() == 0 && cov.GetPricedCount() == 0 {
+		return "No holdings in scope: this result values nothing."
 	}
 
-	var noQuote, thin int
+	var parts []string
+	if cov.GetUnpricedCount() == 0 {
+		parts = append(parts, fmt.Sprintf(
+			"Coverage: all %d holdings were priced; nothing is missing from this result.",
+			cov.GetPricedCount()))
+	} else {
+		parts = append(parts, fmt.Sprintf(
+			"Coverage: %d of %d holdings priced. %d holding(s) are OUT of the total — %s.",
+			cov.GetPricedCount(), cov.GetPricedCount()+cov.GetUnpricedCount(),
+			cov.GetUnpricedCount(), unpricedReasons(cov)))
+	}
+
+	if s := stalePhrase(cov); s != "" {
+		parts = append(parts, s)
+	}
+	if d := datesPhrase(cov); d != "" {
+		parts = append(parts, d)
+	}
+	if cov.GetUnpricedCount() > 0 {
+		parts = append(parts, "Any total from this result covers priced holdings only; say so when reporting it.")
+	}
+	return strings.Join(parts, " ")
+}
+
+// unpricedReasons breaks the disclosed sample down by why each holding stayed
+// out. Only non-empty buckets are spoken: a "0 have X" clause invites the reader
+// to treat the absent case as meaningful.
+//
+// NEVER_PRICED is its own clause and must not fold into "no quote yet". They are
+// different claims about where the gap lives — one says our pipeline has not
+// reached the asset, the other says every source it has was asked and none ever
+// answered. Collapsing them was a real defect: production reported nine ETFs as
+// "no quote at all" while the field beside it said they had been asked since
+// 2026-08-07.
+func unpricedReasons(cov *apiv1.ValuationCoverage) string {
+	var noQuote, thin, never int
 	for _, u := range cov.GetUnpriced() {
 		switch u.GetReason() {
 		case apiv1.UnpricedReason_UNPRICED_REASON_THIN_MARKET:
 			thin++
+		case apiv1.UnpricedReason_UNPRICED_REASON_NEVER_PRICED:
+			never++
 		default:
 			noQuote++
 		}
 	}
-	reasons := fmt.Sprintf("%d of the %d listed have no quote at all, %d have a quote with no market behind it",
-		noQuote, len(cov.GetUnpriced()), thin)
-	if cov.GetUnpricedTruncated() {
-		reasons += "; the list is a capped sample of a larger set"
+
+	var clauses []string
+	if noQuote > 0 {
+		clauses = append(clauses, fmt.Sprintf("%d have no quote yet", noQuote))
+	}
+	if never > 0 {
+		clauses = append(clauses, fmt.Sprintf(
+			"%d have been asked of every source available and never answered (evidence of silence, not a delisting verdict)", never))
+	}
+	if thin > 0 {
+		clauses = append(clauses, fmt.Sprintf("%d have a quote with no market behind it", thin))
 	}
 
+	out := fmt.Sprintf("of the %d listed, %s", len(cov.GetUnpriced()), strings.Join(clauses, ", "))
+	if len(clauses) == 0 {
+		out = fmt.Sprintf("the %d listed carry no stated reason", len(cov.GetUnpriced()))
+	}
+	if cov.GetUnpricedTruncated() {
+		out += "; the list is a capped sample of a larger set"
+	}
+	return out
+}
+
+// stalePhrase speaks the priced holdings whose quote is older than the
+// instance's freshness policy. Silent when none are: a "0 stale" clause is noise
+// that trains the reader to skip the sentence on the day it matters.
+func stalePhrase(cov *apiv1.ValuationCoverage) string {
+	if cov.GetStaleCount() == 0 {
+		return ""
+	}
 	return fmt.Sprintf(
-		"Coverage: %d of %d holdings priced. %d holding(s) are NOT included — %s. "+
-			"Any total from this result covers priced holdings only; say so when reporting it.",
-		cov.GetPricedCount(), cov.GetPricedCount()+cov.GetUnpricedCount(), cov.GetUnpricedCount(), reasons)
+		"%d priced holding(s) are IN the total on a quote older than this instance's freshness policy — "+
+			"they are named, not removed, so do not subtract them a second time.",
+		cov.GetStaleCount())
+}
+
+// datesPhrase dates both axes of the total. A price and an amount go stale
+// independently and only the price has a sweep watching it, so naming one and
+// omitting the other invites the reader to assume the omitted one is current.
+func datesPhrase(cov *apiv1.ValuationCoverage) string {
+	var clauses []string
+	if ts := cov.GetPricesAsOf(); ts.IsValid() {
+		clauses = append(clauses, fmt.Sprintf("the oldest price behind it is from %s (%s)",
+			ts.AsTime().UTC().Format(time.RFC3339), age(ts.AsTime())))
+	}
+	if ts := cov.GetAmountsAsOf(); ts.IsValid() {
+		clauses = append(clauses, fmt.Sprintf("the quantities were last confirmed %s (%s)",
+			ts.AsTime().UTC().Format(time.RFC3339), age(ts.AsTime())))
+	}
+	if len(clauses) == 0 {
+		return ""
+	}
+	return "Dating this total: " + strings.Join(clauses, ", ") + "."
+}
+
+// age renders how long ago t was, coarsely. The exact figure is in the
+// timestamp beside it; this is the part a reader acts on.
+func age(t time.Time) string {
+	d := now().Sub(t)
+	switch {
+	case d < 0:
+		return "in the future"
+	case d < time.Hour:
+		return fmt.Sprintf("%d minutes ago", int(d.Minutes()))
+	case d < 48*time.Hour:
+		return fmt.Sprintf("%d hours ago", int(d.Hours()))
+	default:
+		return fmt.Sprintf("%d days ago", int(d.Hours()/24))
+	}
 }
 
 // resultJSON marshals an arbitrary value (typically an enriched map) into a result.

@@ -21,7 +21,9 @@ func registerAnalyticsTools(s *server.MCPServer, c *backend.Clients) {
 				"parent_id, no asset_id) aggregate their children. "+
 				"The map draws PRICED holdings only: a position with no usable quote produces no "+
 				"node at all rather than a small one, so the nodes are not the whole portfolio. "+
-				"What is missing is in `coverage` / `coverage_note`; report it alongside the map."),
+				"What is missing is in `coverage` / `coverage_note`; report it alongside the map. "+
+				"The note also names the drawn nodes whose price is older than the instance's "+
+				"freshness policy — those are on the map, not absent from it."),
 			mcp.WithString("portfolio_id", mcp.Required(), mcp.Description("Portfolio UUID (heatmap scope).")),
 			mcp.WithString("group_by", mcp.Description("Grouping axis: 'account' or empty for a flat map."),
 				mcp.Enum("", "account")),

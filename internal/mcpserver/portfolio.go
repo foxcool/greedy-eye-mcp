@@ -114,7 +114,10 @@ func registerPortfolioTools(s *server.MCPServer, c *backend.Clients) {
 				"Adds a human-readable total alongside the raw scaled integer. "+
 				"The total covers PRICED holdings only: positions with no usable quote stay out of "+
 				"it and are reported in `coverage` / `coverage_note`. Quote the total together with "+
-				"that coverage — a total presented alone reads as the whole portfolio."),
+				"that coverage — a total presented alone reads as the whole portfolio. "+
+				"`coverage_note` keeps two different doubts apart: holdings OUT of the total for want "+
+				"of a price, and holdings IN it on a quote older than the instance's freshness policy. "+
+				"Only the first kind is missing from the number; do not subtract the second."),
 			mcp.WithString("portfolio_id", mcp.Required(), mcp.Description("Portfolio UUID.")),
 			mcp.WithString("quote_asset_id", mcp.Description("Quote currency: asset UUID or ticker (e.g. USD). Defaults to USD.")),
 		),
