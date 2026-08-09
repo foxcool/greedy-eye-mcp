@@ -123,6 +123,33 @@ func TestCoverageNote_FullCoverageStillSpeaks(t *testing.T) {
 	}
 }
 
+// TestAge_SingularAtOne: production printed "1 hours ago" on the first live
+// call. The note is quoted verbatim by a model, and a sentence that cannot
+// count reads as machine output rather than as a claim.
+func TestAge_SingularAtOne(t *testing.T) {
+	fixed := time.Date(2026, 8, 9, 12, 0, 0, 0, time.UTC)
+	now = func() time.Time { return fixed }
+	t.Cleanup(func() { now = time.Now })
+
+	cases := []struct {
+		ago  time.Duration
+		want string
+	}{
+		{time.Minute, "1 minute ago"},
+		{2 * time.Minute, "2 minutes ago"},
+		{time.Hour, "1 hour ago"},
+		{6 * time.Hour, "6 hours ago"},
+		{24 * time.Hour, "24 hours ago"}, // still hours below the 48h cut
+		{48 * time.Hour, "2 days ago"},
+		{72 * time.Hour, "3 days ago"},
+	}
+	for _, c := range cases {
+		if got := age(fixed.Add(-c.ago)); got != c.want {
+			t.Errorf("age(-%s) = %q, want %q", c.ago, got, c.want)
+		}
+	}
+}
+
 // TestCoverageNote_ProductionShapes pins the two shapes production actually
 // produces, whole. The clauses are tested separately above; this one exists
 // because the sentence is read by a model as one string, and a defect that only
