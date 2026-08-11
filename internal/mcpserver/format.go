@@ -182,6 +182,13 @@ func datesPhrase(cov *apiv1.ValuationCoverage) string {
 	if ts := cov.GetAmountsAsOf(); ts.IsValid() {
 		clauses = append(clauses, fmt.Sprintf("the quantities were last confirmed %s (%s)",
 			ts.AsTime().UTC().Format(time.RFC3339), age(ts.AsTime())))
+	} else if cov.GetPricedCount() > 0 {
+		// The date covers synced amounts only, so it is absent when every counted
+		// holding was entered by hand. Saying nothing here would read as "the
+		// quantities are current" — the omission this whole sentence exists to
+		// prevent — while a date would claim a confirmation nobody made.
+		clauses = append(clauses, "no synced amount stands behind it — every holding in it was entered by hand, "+
+			"so the quantities are as current as whoever last edited them")
 	}
 	if len(clauses) == 0 {
 		return ""
