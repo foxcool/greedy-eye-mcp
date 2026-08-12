@@ -105,6 +105,29 @@ func TestCoverageNote_DatesBothAxes(t *testing.T) {
 	}
 }
 
+// TestCoverageNote_SaysWhenNoSyncedAmountBacksTheTotal: amounts_as_of covers
+// synced holdings only, so a portfolio kept entirely by hand leaves it unset.
+// Dropping the clause would leave the sentence dating the price and silent about
+// the quantities — exactly the omission it exists to close.
+func TestCoverageNote_SaysWhenNoSyncedAmountBacksTheTotal(t *testing.T) {
+	fixed := time.Date(2026, 8, 9, 12, 0, 0, 0, time.UTC)
+	now = func() time.Time { return fixed }
+	t.Cleanup(func() { now = time.Now })
+
+	note := coverageNote(&apiv1.ValuationCoverage{
+		PricedCount: 3,
+		PricesAsOf:  timestamppb.New(fixed.Add(-6 * time.Hour)),
+		// AmountsAsOf unset: nothing in this total came from a sync.
+	})
+
+	if !strings.Contains(note, "no synced amount stands behind it") {
+		t.Errorf("an absent amounts_as_of must be explained, not skipped, got: %s", note)
+	}
+	if !strings.Contains(note, "the oldest price behind it is from") {
+		t.Errorf("the price axis is still dated, got: %s", note)
+	}
+}
+
 // TestCoverageNote_FullCoverageStillSpeaks: a complete valuation says so. Silence
 // would be indistinguishable from a tool that never checked.
 func TestCoverageNote_FullCoverageStillSpeaks(t *testing.T) {
