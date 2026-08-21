@@ -112,6 +112,26 @@ func coverageNote(cov *apiv1.ValuationCoverage) string {
 	return strings.Join(parts, " ")
 }
 
+// unpricedPageNote says in words whether this page is the end of the walk.
+//
+// The rows alone cannot say it: a short page is ordinary here, because the tail
+// is recomputed live and a holding priced since the last call simply stops
+// appearing. Only an empty next_page_token ends the walk, and a reader who
+// infers completeness from row count would announce a partial worklist as the
+// whole one.
+func unpricedPageNote(rows int, nextToken string) string {
+	if rows == 0 && nextToken == "" {
+		return "No unpriced holdings match: every position in scope has a usable quote."
+	}
+	if nextToken == "" {
+		return fmt.Sprintf("%d holding(s) on this page, and this is the last page: the walk is complete.", rows)
+	}
+	return fmt.Sprintf(
+		"%d holding(s) on this page, and MORE REMAIN — call again with page_token=%q. "+
+			"Do not report this page as the full set. A page can also be shorter than asked, "+
+			"since a holding priced since the last call drops out of the walk.", rows, nextToken)
+}
+
 // unpricedReasons breaks the disclosed sample down by why each holding stayed
 // out. Only non-empty buckets are spoken: a "0 have X" clause invites the reader
 // to treat the absent case as meaningful.
@@ -152,7 +172,10 @@ func unpricedReasons(cov *apiv1.ValuationCoverage) string {
 		out = fmt.Sprintf("the %d listed carry no stated reason", len(cov.GetUnpriced()))
 	}
 	if cov.GetUnpricedTruncated() {
-		out += "; the list is a capped sample of a larger set"
+		// Naming the way out matters more than admitting the cap. "A capped
+		// sample" told a reader the tail existed and left them no route to it,
+		// so the tail went unworked — which is what the list is for.
+		out += "; the list is a capped sample of a larger set — use eye_list_unpriced_holdings to walk all of them"
 	}
 	return out
 }

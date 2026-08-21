@@ -108,6 +108,58 @@ func registerPortfolioTools(s *server.MCPServer, c *backend.Clients) {
 	)
 
 	s.AddTool(
+		mcp.NewTool("eye_list_unpriced_holdings",
+			mcp.WithDescription("Walk the positions a valuation leaves out of its total. "+
+				"This is the worklist behind `coverage.unpriced`, which is only a capped sample: "+
+				"the count there is exact, the list is a prefix. Here the whole tail is reachable, "+
+				"a page at a time. "+
+				"Each row is a piece of work, and the reason says which: NEVER_PRICED means every "+
+				"source available was asked and none ever answered — usually an asset to bind or a "+
+				"market to add, not a delisting verdict; THIN_MARKET means a quote exists but no "+
+				"market behind it, which is a judgement its owner has to make. "+
+				"A PAGE IS NOT THE SET: report what this page holds, and say more remain whenever "+
+				"`next_page_token` is non-empty. Pass it back to continue. "+
+				"Positions excluded by a scam verdict are NOT here — they are out of the total by "+
+				"decision rather than for want of a price, and are counted separately."),
+			mcp.WithString("portfolio_id", mcp.Description(
+				"Limit to one portfolio. Omit to walk every portfolio you own in a single pass.")),
+			mcp.WithString("reason", mcp.Description(
+				"Filter to one kind of gap: never_priced, thin_market, or no_quote. "+
+					"Omit for all of them.")),
+			mcp.WithNumber("page_size", mcp.Description("Rows per page. Defaults to 100."), mcp.Min(0)),
+			mcp.WithString("page_token", mcp.Description(
+				"Continue a walk: the `next_page_token` from the previous call.")),
+		),
+		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			reason, err := enumValue[apiv1.UnpricedReason](
+				apiv1.UnpricedReason(0).Descriptor(), "reason", req.GetString("reason", ""))
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			in := &apiv1.ListUnpricedHoldingsRequest{
+				PortfolioId: optString(req.GetString("portfolio_id", "")),
+				PageSize:    optInt32(req.GetInt("page_size", 0)),
+				PageToken:   optString(req.GetString("page_token", "")),
+			}
+			if reason != apiv1.UnpricedReason_UNPRICED_REASON_UNSPECIFIED {
+				in.Reason = &reason
+			}
+			resp, err := c.Portfolio.ListUnpricedHoldings(ctx, connect.NewRequest(in))
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			// The same discipline the coverage note keeps: a partial answer has to
+			// say it is partial in words, next to the data. A model that reads
+			// only the rows would otherwise report a page as the whole tail —
+			// which is the failure this endpoint exists to end, reintroduced one
+			// layer up.
+			return resultProtoWith(resp.Msg, map[string]any{
+				"page_note": unpricedPageNote(len(resp.Msg.GetHoldings()), resp.Msg.GetNextPageToken()),
+			})
+		},
+	)
+
+	s.AddTool(
 		mcp.NewTool("eye_calculate_portfolio_value",
 			mcp.WithDescription("Compute the total value of a portfolio in a quote currency. "+
 				"Read-only: it values holdings, it does not change anything. "+

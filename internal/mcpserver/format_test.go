@@ -225,7 +225,7 @@ func TestCoverageNote_ProductionShapes(t *testing.T) {
 	wantCrypto := "Coverage: 85 of 156 holdings priced. 71 holding(s) are OUT of the total — of the 3 listed, " +
 		"1 have no quote yet, 1 have been asked of every source available and never answered " +
 		"(evidence of silence, not a delisting verdict), 1 have a quote with no market behind it; " +
-		"the list is a capped sample of a larger set. " +
+		"the list is a capped sample of a larger set — use eye_list_unpriced_holdings to walk all of them. " +
 		"2 priced holding(s) are IN the total on a quote older than this instance's freshness policy — " +
 		"they are named, not removed, so do not subtract them a second time. " +
 		"Dating this total: the oldest price behind it is from 2026-08-09T06:00:00Z (2 hours ago), " +
@@ -286,4 +286,57 @@ func textOf(t *testing.T, res any) string {
 		t.Fatalf("expected one content item, got %d", len(envelope.Content))
 	}
 	return envelope.Content[0].Text
+}
+
+// The page note is the only thing standing between a partial worklist and a
+// reader announcing it as the whole one. The rows cannot carry that: a short
+// page is ordinary here, since the tail is recomputed live and anything priced
+// since the last call drops out.
+func TestUnpricedPageNote(t *testing.T) {
+	t.Run("more remain says so and carries the token", func(t *testing.T) {
+		got := unpricedPageNote(100, "Y3Vyc29y")
+		if !strings.Contains(got, "MORE REMAIN") {
+			t.Errorf("a continuing walk must say so, got: %s", got)
+		}
+		if !strings.Contains(got, "Y3Vyc29y") {
+			t.Errorf("the note must carry the token to continue with, got: %s", got)
+		}
+		if !strings.Contains(got, "Do not report this page as the full set") {
+			t.Errorf("the note must forbid reporting a page as the set, got: %s", got)
+		}
+	})
+
+	t.Run("last page is stated, not left to inference", func(t *testing.T) {
+		got := unpricedPageNote(7, "")
+		if !strings.Contains(got, "last page") {
+			t.Errorf("completeness must be stated, got: %s", got)
+		}
+		if strings.Contains(got, "MORE REMAIN") {
+			t.Errorf("a finished walk must not claim more remain, got: %s", got)
+		}
+	})
+
+	t.Run("empty result does not read as a broken query", func(t *testing.T) {
+		got := unpricedPageNote(0, "")
+		if !strings.Contains(got, "every position in scope has a usable quote") {
+			t.Errorf("an empty tail is an answer, not an absence, got: %s", got)
+		}
+	})
+}
+
+// A truncated sample that admits the cap without naming a way past it is what
+// left the tail unworked. Now that a tool exists, the note has to point at it.
+func TestTruncatedSampleNamesTheWayOut(t *testing.T) {
+	cov := &apiv1.ValuationCoverage{
+		PricedCount:       1,
+		UnpricedCount:     71,
+		UnpricedTruncated: true,
+		Unpriced: []*apiv1.UnpricedHolding{
+			{Reason: apiv1.UnpricedReason_UNPRICED_REASON_THIN_MARKET},
+		},
+	}
+	got := unpricedReasons(cov)
+	if !strings.Contains(got, "eye_list_unpriced_holdings") {
+		t.Errorf("a capped sample must name the tool that walks the rest, got: %s", got)
+	}
 }
