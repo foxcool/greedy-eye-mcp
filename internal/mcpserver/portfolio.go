@@ -116,7 +116,9 @@ func registerPortfolioTools(s *server.MCPServer, c *backend.Clients) {
 				"Each row is a piece of work, and the reason says which: NEVER_PRICED means every "+
 				"source available was asked and none ever answered — usually an asset to bind or a "+
 				"market to add, not a delisting verdict; THIN_MARKET means a quote exists but no "+
-				"market behind it, which is a judgement its owner has to make. "+
+				"market behind it, which is a judgement its owner has to make; NO_CROSS_RATE means "+
+				"the position IS priced, but in a base with no path to the display currency — one "+
+				"exchange rate is missing, not coverage for the asset. "+
 				"A PAGE IS NOT THE SET: report what this page holds, and say more remain whenever "+
 				"`next_page_token` is non-empty. Pass it back to continue. "+
 				"Positions excluded by a scam verdict are NOT here — they are out of the total by "+
@@ -124,8 +126,8 @@ func registerPortfolioTools(s *server.MCPServer, c *backend.Clients) {
 			mcp.WithString("portfolio_id", mcp.Description(
 				"Limit to one portfolio. Omit to walk every portfolio you own in a single pass.")),
 			mcp.WithString("reason", mcp.Description(
-				"Filter to one kind of gap: never_priced, thin_market, or no_quote. "+
-					"Omit for all of them.")),
+				"Filter to one kind of gap: never_priced, thin_market, no_quote, or "+
+					"no_cross_rate. Omit for all of them.")),
 			mcp.WithNumber("page_size", mcp.Description("Rows per page. Defaults to 100."), mcp.Min(0)),
 			mcp.WithString("page_token", mcp.Description(
 				"Continue a walk: the `next_page_token` from the previous call.")),
