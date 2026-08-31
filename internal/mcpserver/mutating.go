@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"connectrpc.com/connect"
 	"github.com/mark3labs/mcp-go/mcp"
@@ -206,6 +207,78 @@ func registerMutatingTools(s *server.MCPServer, c *backend.Clients) {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 			return resultProto(resp.Msg)
+		},
+	)
+
+	s.AddTool(
+		mcp.NewTool("eye_reset_sweep_schedule",
+			mcp.WithDescription("Forgive the price-sweep back-off accrued against named sources: their assets "+
+				"become due again instead of waiting out a deferral earned under conditions that no longer hold. "+
+				"Use when a source was unreachable or was being asked for assets it never covered, and its "+
+				"schedule outlived the fix — the shape where a correct deploy produces no observable change for days. "+
+				"ALWAYS call with dry_run=true first (the default), show the plan, and only repeat with "+
+				"dry_run=false once the user confirms. This is an operator's statement, not an inference: it "+
+				"withdraws the conclusion drawn from the attempt log without touching the log, and asserts "+
+				"nothing about whether a price exists. The next sweep finds out. "+
+				"Sources must be named — there is deliberately no 'all'."),
+			mcp.WithArray("source_ids", mcp.Required(),
+				mcp.Description("Sources to forgive, e.g. binance, cbr, coingecko, moex. Required: an empty list is rejected, not read as 'all'."),
+				mcp.WithStringItems()),
+			mcp.WithBoolean("dry_run", mcp.Description("Plan without writing. Defaults to true — pass false only to commit a confirmed plan.")),
+		),
+		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			sourceIDs := req.GetStringSlice("source_ids", nil)
+			if len(sourceIDs) == 0 {
+				return mcp.NewToolResultError("source_ids is required: name the sources to reset"), nil
+			}
+
+			// The backend RPC has no dry_run — a reset is unconditional there. So the
+			// plan is composed here from the schedule the reset would act on, which is
+			// also the honest thing to show: how many rows are actually deferred is the
+			// number that says whether the schedule was ever the problem.
+			if req.GetBool("dry_run", true) { // default to the safe path
+				sched, err := c.MarketData.GetSweepSchedule(ctx, connect.NewRequest(&apiv1.GetSweepScheduleRequest{}))
+				if err != nil {
+					return mcp.NewToolResultError(err.Error()), nil
+				}
+				known := make(map[string]*apiv1.SourceSchedule, len(sched.Msg.GetSources()))
+				for _, s := range sched.Msg.GetSources() {
+					known[s.GetSourceId()] = s
+				}
+				plan := make([]map[string]any, 0, len(sourceIDs))
+				for _, id := range sourceIDs {
+					s, ok := known[id]
+					if !ok {
+						// Named but absent from the registry: the real call answers
+						// NotFound, so say so now rather than promise a reset.
+						plan = append(plan, map[string]any{"source_id": id, "error": "no such price source — the reset would fail with NotFound"})
+						continue
+					}
+					plan = append(plan, map[string]any{
+						"source_id":       id,
+						"would_free":      s.GetDeferred(),
+						"due_now":         s.GetDueNow(),
+						"max_misses":      s.GetMaxMisses(),
+						"latest_deferred": s.GetLatestDeferred().AsTime().Format(time.RFC3339),
+					})
+				}
+				return resultJSON(map[string]any{
+					"dry_run": true,
+					"plan":    plan,
+					"note": "would_free counts assets currently deferred; rows carrying misses but already due are " +
+						"reset too, so the committed assets_freed can exceed it. Repeat with dry_run=false to commit.",
+				})
+			}
+
+			in := &apiv1.ResetSweepScheduleRequest{SourceIds: sourceIDs}
+			resp, err := c.MarketData.ResetSweepSchedule(ctx, connect.NewRequest(in))
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			return resultProtoWith(resp.Msg, map[string]any{
+				"note": "Back-off withdrawn. Confirm with eye_get_sweep_schedule: deferred should fall and " +
+					"due_now rise by roughly the same amount. Zero freed means the schedule was already clear.",
+			})
 		},
 	)
 }
