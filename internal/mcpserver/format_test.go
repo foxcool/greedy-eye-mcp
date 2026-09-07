@@ -340,3 +340,63 @@ func TestTruncatedSampleNamesTheWayOut(t *testing.T) {
 		t.Errorf("a capped sample must name the tool that walks the rest, got: %s", got)
 	}
 }
+
+// TestSyncNote_ZeroSkipsAreSpoken: the counters exist because a skip used to be
+// silence, and proto JSON drops a zero. If the note only spoke when something
+// was skipped, "nothing was skipped" would look exactly like "this build does
+// not count skips" — reinstating the ambiguity the fields were added to end.
+func TestSyncNote_ZeroSkipsAreSpoken(t *testing.T) {
+	note := syncNote(&apiv1.SyncAccountResponse{
+		AssetsUpserted:   12,
+		HoldingsUpserted: 42,
+		HoldingsZeroed:   3,
+	})
+
+	for _, want := range []string{"Wrote 42 holding(s)", "zeroed 3", "12 asset(s)", "No position was skipped"} {
+		if !strings.Contains(note, want) {
+			t.Errorf("sync note must contain %q, got: %s", want, note)
+		}
+	}
+	if strings.Contains(note, "GUESSED") || strings.Contains(note, "account(s) were created") {
+		t.Errorf("clauses for absent counts must stay silent, got: %s", note)
+	}
+}
+
+// TestSyncNote_SkipHoldsBackRemoval: the three counters are not symmetric and
+// the note must not flatten them. A skip is the only one that changes what the
+// snapshot is allowed to do — paper that fell out of the catalogue is still
+// owned, so the sync may not zero it.
+func TestSyncNote_SkipHoldsBackRemoval(t *testing.T) {
+	note := syncNote(&apiv1.SyncAccountResponse{
+		HoldingsUpserted:      21,
+		PositionsSkipped:      2,
+		AssetsDefaultedMarket: 7,
+		AccountsCreated:       2,
+		Errors:                []string{"tinvest: instrument not in catalogue"},
+	})
+
+	for _, want := range []string{
+		"2 position(s) the source reported could NOT be named",
+		"no holding was removed on its word",
+		"7 asset(s) were filed under a market GUESSED",
+		"holds nothing back",
+		"2 account(s) were created",
+		"never merged",
+		"1 per-item error(s)",
+	} {
+		if !strings.Contains(note, want) {
+			t.Errorf("sync note must contain %q, got: %s", want, note)
+		}
+	}
+	if strings.Contains(note, "No position was skipped") {
+		t.Errorf("the reassuring clause must not appear when positions were skipped, got: %s", note)
+	}
+}
+
+// TestSyncNote_NilIsEmpty: resultProtoWith drops empty strings, so a nil
+// response must produce no note rather than a sentence about nothing.
+func TestSyncNote_NilIsEmpty(t *testing.T) {
+	if got := syncNote(nil); got != "" {
+		t.Errorf("nil response must produce no note, got: %s", got)
+	}
+}
