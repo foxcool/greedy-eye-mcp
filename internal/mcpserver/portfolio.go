@@ -199,9 +199,18 @@ func registerPortfolioTools(s *server.MCPServer, c *backend.Clients) {
 
 	s.AddTool(
 		mcp.NewTool("eye_sync_account",
-			mcp.WithDescription("Sync a wallet account's holdings from on-chain data (via Moralis). "+
-				"A data-refresh action: it upserts assets/holdings for the account but moves no funds. "+
-				"Only wallet-type accounts with a configured address can be synced."),
+			mcp.WithDescription("Re-read one account's holdings from its source. A data-refresh "+
+				"action: it upserts assets and holdings for the account and moves no funds. "+
+				"Wallet, exchange and broker accounts can be synced; a manual account cannot, "+
+				"because its positions come from a human. A broker account carrying only a "+
+				"credential is not one account but the key to several: syncing it reaches every "+
+				"brokerage account that token opens, CREATING one local account per brokerage "+
+				"account rather than merging them. "+
+				"Report `sync_note` with the counts: a snapshot that could not speak for every "+
+				"position is not the same snapshot as one that could, and the difference does not "+
+				"show in the holdings it wrote. The unattended balance sweep re-reads accounts on "+
+				"its own schedule, so call this when the answer is wanted NOW, or to let a broker "+
+				"credential go looking for an account opened since the last sync."),
 			mcp.WithString("account_id", mcp.Required(), mcp.Description("Account UUID to sync.")),
 		),
 		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -213,7 +222,9 @@ func registerPortfolioTools(s *server.MCPServer, c *backend.Clients) {
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			return resultProto(resp.Msg)
+			return resultProtoWith(resp.Msg, map[string]any{
+				"sync_note": syncNote(resp.Msg),
+			})
 		},
 	)
 }

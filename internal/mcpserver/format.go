@@ -323,3 +323,58 @@ func optInt32(i int) *int32 {
 	v := int32(i)
 	return &v
 }
+
+// syncNote says in words what a sync did and, more importantly, what it could
+// not account for.
+//
+// The counts exist because a skip used to be silence: a position the source DID
+// report and the instance could not name left no trace, and a snapshot missing
+// one paper looks exactly like a snapshot missing nothing. The proto encoding
+// drops a zero, so reading the counts off the response would make "nothing was
+// skipped" indistinguishable from "this build does not count skips" — which is
+// the ambiguity the fields were added to end. They are spoken here either way.
+//
+// The three are NOT symmetric and the note says so, because acting on them
+// differs: a skip HOLDS BACK removals (paper that fell out of the catalogue is
+// still owned, so the snapshot may not zero it), a defaulted market is a guess
+// that holds nothing back, and a created account is neither — it is the fan-out
+// of a broker credential reporting what it found.
+func syncNote(resp *apiv1.SyncAccountResponse) string {
+	if resp == nil {
+		return ""
+	}
+
+	parts := []string{fmt.Sprintf(
+		"Wrote %d holding(s) and zeroed %d; %d asset(s) upserted.",
+		resp.GetHoldingsUpserted(), resp.GetHoldingsZeroed(), resp.GetAssetsUpserted())}
+
+	if n := resp.GetPositionsSkipped(); n > 0 {
+		parts = append(parts, fmt.Sprintf(
+			"%d position(s) the source reported could NOT be named, so this snapshot does not "+
+				"speak for them and no holding was removed on its word. Report the number: the "+
+				"holdings it wrote look complete either way.", n))
+	} else {
+		parts = append(parts, "No position was skipped: the snapshot speaks for everything the source reported.")
+	}
+
+	if n := resp.GetAssetsDefaultedMarket(); n > 0 {
+		parts = append(parts, fmt.Sprintf(
+			"%d asset(s) were filed under a market GUESSED from the row's currency rather than "+
+				"resolved. The guess holds nothing back, and it is the one place this work "+
+				"guesses at all.", n))
+	}
+
+	if n := resp.GetAccountsCreated(); n > 0 {
+		parts = append(parts, fmt.Sprintf(
+			"%d account(s) were created: a broker credential reaches several brokerage accounts "+
+				"and each gets its own local account, never merged. Two of them holding the same "+
+				"share are two positions, and a transfer between them is an event.", n))
+	}
+
+	if errs := resp.GetErrors(); len(errs) > 0 {
+		parts = append(parts, fmt.Sprintf(
+			"%d per-item error(s): the snapshot landed but could not vouch for every balance in it.", len(errs)))
+	}
+
+	return strings.Join(parts, " ")
+}
