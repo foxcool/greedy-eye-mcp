@@ -15,7 +15,11 @@ import (
 func registerMarketDataTools(s *server.MCPServer, c *backend.Clients) {
 	s.AddTool(
 		mcp.NewTool("eye_list_assets",
-			mcp.WithDescription("List financial assets (crypto, stocks, etc.) tracked in greedy-eye."),
+			mcp.WithDescription("List financial assets (crypto, stocks, etc.) tracked in greedy-eye. "+
+				"Search with `query` rather than paging the catalogue: it is thousands of rows, most of them airdrop spam."),
+			mcp.WithString("query", mcp.Description("Text search: symbol by prefix, name by substring (case-insensitive), "+
+				"an exact asset id, or an exact bound external ref — a FIGI, a Solana mint in its exact case, an EVM 0x address in any case. At most 200 bytes.")),
+			mcp.WithArray("ids", mcp.Description("Only these asset UUIDs (at most 1000)."), mcp.WithStringItems()),
 			mcp.WithArray("tags", mcp.Description("Filter by tags (all must match)."), mcp.WithStringItems()),
 			mcp.WithNumber("page_size", mcp.Description("Max results per page."), mcp.Min(0)),
 			mcp.WithString("page_token", mcp.Description("Pagination token from a previous response.")),
@@ -24,13 +28,7 @@ func registerMarketDataTools(s *server.MCPServer, c *backend.Clients) {
 				mcp.Enum("unknown", "legit", "suspect", "scam", "impersonation")),
 		),
 		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			in := &apiv1.ListAssetsRequest{
-				Tags:            req.GetStringSlice("tags", nil),
-				PageSize:        optInt32(req.GetInt("page_size", 0)),
-				PageToken:       optString(req.GetString("page_token", "")),
-				IdentityVerdict: optString(req.GetString("identity_verdict", "")),
-			}
-			resp, err := c.MarketData.ListAssets(ctx, connect.NewRequest(in))
+			resp, err := c.MarketData.ListAssets(ctx, connect.NewRequest(listAssetsRequest(req)))
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -177,4 +175,18 @@ func registerMarketDataTools(s *server.MCPServer, c *backend.Clients) {
 			return resultProto(resp.Msg)
 		},
 	)
+}
+
+// listAssetsRequest maps the tool's arguments onto the RPC. An empty query or
+// id list is left out rather than sent empty: either way the backend applies
+// no filter, and leaving it out keeps the request saying only what was asked.
+func listAssetsRequest(req mcp.CallToolRequest) *apiv1.ListAssetsRequest {
+	return &apiv1.ListAssetsRequest{
+		Query:           optString(req.GetString("query", "")),
+		Ids:             req.GetStringSlice("ids", nil),
+		Tags:            req.GetStringSlice("tags", nil),
+		PageSize:        optInt32(req.GetInt("page_size", 0)),
+		PageToken:       optString(req.GetString("page_token", "")),
+		IdentityVerdict: optString(req.GetString("identity_verdict", "")),
+	}
 }

@@ -13,9 +13,8 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # Sibling layout: go.mod has `replace github.com/foxcool/greedy-eye => ../greedy-eye`.
-      # Check out both repos as siblings so the replace resolves. Tracks greedy-eye
-      # main: the api/v1 package it imports is not yet in a published tag.
+      # The sibling greedy-eye checkout predates the published backend tag; go.mod no
+      # longer has a replace, so the module comes from the proxy and the checkout is unused.
       - uses: actions/checkout@v4
         with:
           path: greedy-eye-mcp

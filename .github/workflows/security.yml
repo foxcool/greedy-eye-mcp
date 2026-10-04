@@ -6,8 +6,8 @@ on:
   pull_request:
 
 jobs:
-  # Sibling layout: go.mod has `replace github.com/foxcool/greedy-eye => ../greedy-eye`.
-  # The Go scanners build the module, so they need both repos checked out as siblings.
+  # The sibling greedy-eye checkout predates the published backend tag; go.mod no
+  # longer has a replace, so the module comes from the proxy and the checkout is unused.
   govulncheck:
     name: Scan dependencies for vulnerabilities
     runs-on: ubuntu-latest

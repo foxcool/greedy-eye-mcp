@@ -18,8 +18,7 @@ GREEDY_EYE_BACKEND_URL=http://localhost:8080 ./bin/server
 ```
 
 This module depends on the backend Go module `github.com/foxcool/greedy-eye`
-for the API contract, resolved via a local `replace => ../greedy-eye` in
-`go.mod`. Keep the sibling checkout present.
+for the API contract, at the published tag `go.mod` requires.
 
 The process speaks JSON-RPC over stdout; all logs go to stderr.
 
@@ -142,11 +141,8 @@ container image is shipped — the server runs as a local stdio binary launched 
 the client. `make snapshot` produces the same archives locally without
 publishing.
 
-Tag-triggered releases run in CI: the release workflow checks out `greedy-eye`
-as a sibling so the `replace => ../greedy-eye` directive resolves, then runs
-GoReleaser. This works around the backend `api/v1` package not yet being
-published in a tag (see the `replace` caveat in `AGENTS.md`). `make snapshot`
-still builds the archives locally.
+Tag-triggered releases run in CI with GoReleaser. `make snapshot` builds the
+same archives locally.
 
 ## API contract
 
