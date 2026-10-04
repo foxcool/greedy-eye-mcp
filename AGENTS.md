@@ -28,12 +28,11 @@ backend Go module: we import `github.com/foxcool/greedy-eye/api/v1` (messages)
 and `.../api/v1/apiv1connect` (clients) directly. The backend owns the protos
 and the generated code; we depend on it.
 
-`go.mod` pins the backend with a local `replace` directive
-(`=> ../greedy-eye`) so it resolves offline against the sibling checkout, with
-no tags or GOPRIVATE needed. This works for local builds and local GoReleaser
-runs. CI releases are blocked by it: CI checks out only this repo, so the sibling
-is absent. To unblock CI, tag the backend with a version containing `api/v1`,
-bump the `require`, and drop the `replace` line.
+`go.mod` requires a published backend tag (`require github.com/foxcool/greedy-eye
+vX.Y.Z`); there is no `replace`. That requirement is the compatibility contract,
+so a build uses the released types, not the sibling checkout. A backend field
+added after the pinned tag is invisible here — proto3 drops it as unknown — until
+the `require` is bumped: `go get github.com/foxcool/greedy-eye@vX.Y.Z`.
 
 ## First-run setup
 
@@ -67,8 +66,8 @@ LLM surface without explicit confirmation semantics.
 
 GoReleaser builds per-OS/arch archives (no Docker image); the binary runs locally
 as a stdio server launched by the client. `make snapshot` builds locally,
-`make release` publishes to GitHub Releases. Run it locally for now — see the
-`replace` caveat above for why CI releases are deferred.
+`make release` publishes to GitHub Releases; a pushed tag runs the same release
+in CI.
 
 ## Conventions
 
