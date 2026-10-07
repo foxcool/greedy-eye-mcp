@@ -77,6 +77,8 @@ Read-only by default. Names are namespaced with `eye_`.
 - `eye_calculate_portfolio_value` (adds a human-readable total and a `coverage_note`)
 - `eye_list_rules`, `eye_get_rule`, `eye_simulate_rule` (dry-run only)
 - `eye_get_heatmap` (portfolio treemap: value-sized, change-%-colored nodes)
+- `eye_get_account_health` (per account and price source: whether it produces
+  anything and if not, why; restated in a `health_note`)
 
 Both valuation tools cover **priced holdings only**: a position with no usable
 quote stays out of the total and draws no tile. They report what is missing in

@@ -227,4 +227,29 @@ func registerPortfolioTools(s *server.MCPServer, c *backend.Clients) {
 			})
 		},
 	)
+
+	s.AddTool(
+		mcp.NewTool("eye_get_account_health",
+			mcp.WithDescription("Say, per account, whether it is producing anything and if not why — "+
+				"and the same for every price source the caller's prices depend on, shared ones "+
+				"included (named by provider only). Answers 'the account is configured and nothing "+
+				"moves': a credential that cannot be built, a provider with no adapter, a duplicate "+
+				"that is never asked, a plan spent or a provider pausing after refusals, a chain of a "+
+				"wallet failing sync after sync, an account the balance sweep stood down. "+
+				"Report `health_note`: it names every account and source that is not OK, and says "+
+				"so when all are. A sources state of UNKNOWN means this instance cannot tell, not "+
+				"that sources are fine. Read-only; eye_reset_sweep_schedule withdraws a deferral."),
+			mcp.WithString("account_id", mcp.Description("Optional account UUID to limit the accounts to one; sources are always reported.")),
+		),
+		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			in := &apiv1.GetAccountHealthRequest{AccountId: optString(req.GetString("account_id", ""))}
+			resp, err := c.Portfolio.GetAccountHealth(ctx, connect.NewRequest(in))
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			return resultProtoWith(resp.Msg, map[string]any{
+				"health_note": healthNote(resp.Msg),
+			})
+		},
+	)
 }
