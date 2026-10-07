@@ -400,3 +400,87 @@ func TestSyncNote_NilIsEmpty(t *testing.T) {
 		t.Errorf("nil response must produce no note, got: %s", got)
 	}
 }
+
+// TestHealthNote_HealthIsSpoken: an empty list of problems is the answer
+// "everything works" only if the note says it; otherwise it is
+// indistinguishable from a client that does not know about health at all.
+func TestHealthNote_HealthIsSpoken(t *testing.T) {
+	note := healthNote(&apiv1.GetAccountHealthResponse{
+		Accounts: []*apiv1.AccountHealth{
+			{AccountName: "binance", State: apiv1.HealthState_HEALTH_STATE_OK},
+			{AccountName: "ton", State: apiv1.HealthState_HEALTH_STATE_OK},
+		},
+		Sources:      []*apiv1.SourceHealth{{Provider: "moex", State: apiv1.HealthState_HEALTH_STATE_OK}},
+		SourcesState: apiv1.HealthState_HEALTH_STATE_OK,
+	})
+
+	for _, want := range []string{"All 2 accounts OK", "All 1 price source usable"} {
+		if !strings.Contains(note, want) {
+			t.Errorf("health note must contain %q, got: %s", want, note)
+		}
+	}
+}
+
+// TestHealthNote_NamesEachProblemWithItsDeadline: every account and source
+// that is not OK gets its own sentence with the server's reasons, and a pause
+// carries its deadline — whether to wait or to act depends on it.
+func TestHealthNote_NamesEachProblemWithItsDeadline(t *testing.T) {
+	until := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
+	note := healthNote(&apiv1.GetAccountHealthResponse{
+		Accounts: []*apiv1.AccountHealth{
+			{AccountName: "ok", State: apiv1.HealthState_HEALTH_STATE_OK},
+			{AccountName: "dot", State: apiv1.HealthState_HEALTH_STATE_DEGRADED, Reasons: []*apiv1.HealthReason{
+				{Kind: apiv1.HealthReasonKind_HEALTH_REASON_KIND_CHAIN_FAILING, Message: "hydration has failed 13 sync(s) in a row"},
+			}},
+		},
+		Sources: []*apiv1.SourceHealth{
+			{Provider: "coingecko", State: apiv1.HealthState_HEALTH_STATE_UNUSABLE, Reasons: []*apiv1.HealthReason{
+				{Kind: apiv1.HealthReasonKind_HEALTH_REASON_KIND_PROVIDER_PAUSED, Message: "plan spent", Until: timestamppb.New(until)},
+			}},
+		},
+		SourcesState: apiv1.HealthState_HEALTH_STATE_UNUSABLE,
+	})
+
+	for _, want := range []string{
+		`Account "dot" is degraded: hydration has failed 13 sync(s) in a row.`,
+		"1 of 2 accounts OK",
+		"Price source coingecko is unusable: plan spent (until 2026-11-01T00:00:00Z).",
+	} {
+		if !strings.Contains(note, want) {
+			t.Errorf("health note must contain %q, got: %s", want, note)
+		}
+	}
+	if strings.Contains(note, `"ok"`) || strings.Contains(note, "All ") {
+		t.Errorf("healthy entries must stay silent when something is wrong, got: %s", note)
+	}
+}
+
+// TestHealthNote_UnknownSourcesAreNotFine: an instance that cannot read its
+// sources must not have that summarised as "no source is unwell".
+func TestHealthNote_UnknownSourcesAreNotFine(t *testing.T) {
+	note := healthNote(&apiv1.GetAccountHealthResponse{
+		Accounts:     []*apiv1.AccountHealth{{AccountName: "a", State: apiv1.HealthState_HEALTH_STATE_OK}},
+		SourcesState: apiv1.HealthState_HEALTH_STATE_UNKNOWN,
+	})
+
+	if !strings.Contains(note, "cannot tell") {
+		t.Errorf("unknown sources must be spoken as unknown, got: %s", note)
+	}
+	if strings.Contains(note, "usable.") {
+		t.Errorf("unknown sources must not read as usable, got: %s", note)
+	}
+}
+
+// TestHealthNote_NothingIsNotAllFine: zero accounts or zero sources is not
+// "all OK" — no source at all means nothing can be priced.
+func TestHealthNote_NothingIsNotAllFine(t *testing.T) {
+	note := healthNote(&apiv1.GetAccountHealthResponse{SourcesState: apiv1.HealthState_HEALTH_STATE_OK})
+	for _, want := range []string{"No account to report on.", "No price source is reachable"} {
+		if !strings.Contains(note, want) {
+			t.Errorf("health note must contain %q, got: %s", want, note)
+		}
+	}
+	if strings.Contains(note, "All 0") {
+		t.Errorf("an empty list must not read as all fine, got: %s", note)
+	}
+}

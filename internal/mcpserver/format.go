@@ -378,3 +378,81 @@ func syncNote(resp *apiv1.SyncAccountResponse) string {
 
 	return strings.Join(parts, " ")
 }
+
+// healthNote says in words which accounts and sources are not doing their job
+// and why, one sentence each, and says so when none are: an empty list is the
+// answer "everything is fine" only if it is spoken.
+func healthNote(resp *apiv1.GetAccountHealthResponse) string {
+	if resp == nil {
+		return ""
+	}
+
+	var parts []string
+	unwell := 0
+	for _, a := range resp.GetAccounts() {
+		if a.GetState() == apiv1.HealthState_HEALTH_STATE_OK {
+			continue
+		}
+		unwell++
+		parts = append(parts, fmt.Sprintf("Account %q is %s: %s.",
+			a.GetAccountName(), healthWord(a.GetState()), reasonsPhrase(a.GetReasons())))
+	}
+	switch {
+	case len(resp.GetAccounts()) == 0:
+		parts = append(parts, "No account to report on.")
+	case unwell == 0:
+		parts = append(parts, fmt.Sprintf("All %s OK.", plural(len(resp.GetAccounts()), "account")))
+	default:
+		parts = append(parts, fmt.Sprintf("%d of %s OK.",
+			len(resp.GetAccounts())-unwell, plural(len(resp.GetAccounts()), "account")))
+	}
+
+	if resp.GetSourcesState() == apiv1.HealthState_HEALTH_STATE_UNKNOWN {
+		parts = append(parts, "Price sources: this instance cannot tell whether they are usable; do not read that as fine.")
+		return strings.Join(parts, " ")
+	}
+	sick := 0
+	for _, src := range resp.GetSources() {
+		if src.GetState() == apiv1.HealthState_HEALTH_STATE_OK {
+			continue
+		}
+		sick++
+		parts = append(parts, fmt.Sprintf("Price source %s is %s: %s.",
+			src.GetProvider(), healthWord(src.GetState()), reasonsPhrase(src.GetReasons())))
+	}
+	switch {
+	case len(resp.GetSources()) == 0:
+		parts = append(parts, "No price source is reachable: nothing can be priced.")
+	case sick == 0:
+		parts = append(parts, fmt.Sprintf("All %s usable.", plural(len(resp.GetSources()), "price source")))
+	}
+	return strings.Join(parts, " ")
+}
+
+// healthWord is a state as the note says it.
+func healthWord(s apiv1.HealthState) string {
+	switch s {
+	case apiv1.HealthState_HEALTH_STATE_DEGRADED:
+		return "degraded"
+	case apiv1.HealthState_HEALTH_STATE_UNUSABLE:
+		return "unusable"
+	case apiv1.HealthState_HEALTH_STATE_OK:
+		return "OK"
+	default:
+		return "of unknown health"
+	}
+}
+
+// reasonsPhrase joins the server's messages, adding the deadline where there
+// is one: "until when" is what decides whether to wait or to act.
+func reasonsPhrase(reasons []*apiv1.HealthReason) string {
+	out := make([]string, 0, len(reasons))
+	for _, r := range reasons {
+		msg := r.GetMessage()
+		if u := r.GetUntil(); u != nil {
+			msg += " (until " + u.AsTime().UTC().Format(time.RFC3339) + ")"
+		}
+		out = append(out, msg)
+	}
+	return strings.Join(out, "; ")
+}
