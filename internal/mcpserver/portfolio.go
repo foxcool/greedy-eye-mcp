@@ -55,7 +55,10 @@ func registerPortfolioTools(s *server.MCPServer, c *backend.Clients) {
 	s.AddTool(
 		mcp.NewTool("eye_list_accounts",
 			mcp.WithDescription("List accounts (wallets, exchanges, manual sources), optionally filtered by type. "+
-				"Secrets in account data are masked. Use this to find an existing account before creating one."),
+				"Secrets in account data are masked. Use this to find an existing account before creating one. "+
+				"An account with `disabled: true` was stood down by its owner (since `disabled_at`): it keeps its "+
+				"key and positions, but nothing syncs it or takes it as a provider — do not read its stale "+
+				"positions or its silence as a fault."),
 			mcp.WithString("type", mcp.Description("Filter by account type, e.g. manual or wallet."),
 				mcp.Enum("", "wallet", "exchange", "bank", "broker", "service", "manual")),
 			mcp.WithNumber("page_size", mcp.Description("Max results per page."), mcp.Min(0)),
@@ -236,6 +239,9 @@ func registerPortfolioTools(s *server.MCPServer, c *backend.Clients) {
 				"moves': a credential that cannot be built, a provider with no adapter, a duplicate "+
 				"that is never asked, a plan spent or a provider pausing after refusals, a chain of a "+
 				"wallet failing sync after sync, an account the balance sweep stood down. "+
+				"An ACCOUNT in DISABLED is the owner's own choice, not a fault: it is named but not "+
+				"counted among those that should be working. A PRICE SOURCE in DISABLED is a gap: no "+
+				"enabled account serves it, so what only it prices is unpriced. "+
 				"Report `health_note`: it names every account and source that is not OK, and says "+
 				"so when all are. A sources state of UNKNOWN means this instance cannot tell, not "+
 				"that sources are fine. Read-only; eye_reset_sweep_schedule withdraws a deferral."),

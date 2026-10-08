@@ -388,23 +388,41 @@ func healthNote(resp *apiv1.GetAccountHealthResponse) string {
 	}
 
 	var parts []string
-	unwell := 0
+	unwell, disabled := 0, 0
 	for _, a := range resp.GetAccounts() {
-		if a.GetState() == apiv1.HealthState_HEALTH_STATE_OK {
+		switch a.GetState() {
+		case apiv1.HealthState_HEALTH_STATE_OK:
+			continue
+		case apiv1.HealthState_HEALTH_STATE_DISABLED:
+			// The owner's choice, not a fault: named, but kept out of the
+			// count of accounts that should be working and are not.
+			disabled++
+		default:
+			unwell++
+		}
+		if a.GetState() == apiv1.HealthState_HEALTH_STATE_DISABLED {
+			parts = append(parts, disabledAccountPhrase(a))
 			continue
 		}
-		unwell++
 		parts = append(parts, fmt.Sprintf("Account %q is %s: %s.",
 			a.GetAccountName(), healthWord(a.GetState()), reasonsPhrase(a.GetReasons())))
+	}
+	active := len(resp.GetAccounts()) - disabled
+	noun := "account"
+	if disabled > 0 {
+		noun = "active account"
 	}
 	switch {
 	case len(resp.GetAccounts()) == 0:
 		parts = append(parts, "No account to report on.")
+	case active == 0 && len(resp.GetAccounts()) > 1:
+		parts = append(parts, "Every account reported is disabled by its owner.")
+	case active == 0:
+		// One account asked for and named above; nothing to sum up.
 	case unwell == 0:
-		parts = append(parts, fmt.Sprintf("All %s OK.", plural(len(resp.GetAccounts()), "account")))
+		parts = append(parts, fmt.Sprintf("All %s OK.", plural(active, noun)))
 	default:
-		parts = append(parts, fmt.Sprintf("%d of %s OK.",
-			len(resp.GetAccounts())-unwell, plural(len(resp.GetAccounts()), "account")))
+		parts = append(parts, fmt.Sprintf("%d of %s OK.", active-unwell, plural(active, noun)))
 	}
 
 	if resp.GetSourcesState() == apiv1.HealthState_HEALTH_STATE_UNKNOWN {
@@ -417,6 +435,14 @@ func healthNote(resp *apiv1.GetAccountHealthResponse) string {
 			continue
 		}
 		sick++
+		if src.GetState() == apiv1.HealthState_HEALTH_STATE_DISABLED {
+			// Unlike an account, a source in this state IS a gap: nothing
+			// prices what only it covered. The owner's choice explains the
+			// gap; it does not make it fine.
+			parts = append(parts, fmt.Sprintf("Price source %s has no enabled account to serve it, so what only it prices goes unpriced: %s.",
+				src.GetProvider(), reasonsPhrase(src.GetReasons())))
+			continue
+		}
 		parts = append(parts, fmt.Sprintf("Price source %s is %s: %s.",
 			src.GetProvider(), healthWord(src.GetState()), reasonsPhrase(src.GetReasons())))
 	}
@@ -429,6 +455,19 @@ func healthNote(resp *apiv1.GetAccountHealthResponse) string {
 	return strings.Join(parts, " ")
 }
 
+// disabledAccountPhrase names a stood-down account by the reason's kind, not
+// by trusting the server's wording to carry the word "disabled".
+func disabledAccountPhrase(a *apiv1.AccountHealth) string {
+	var since string
+	for _, r := range a.GetReasons() {
+		if r.GetKind() == apiv1.HealthReasonKind_HEALTH_REASON_KIND_DISABLED && r.GetSince() != nil {
+			since = " since " + r.GetSince().AsTime().UTC().Format(time.RFC3339)
+		}
+	}
+	return fmt.Sprintf("Account %q is disabled by its owner%s: nothing syncs it or takes it as a provider.",
+		a.GetAccountName(), since)
+}
+
 // healthWord is a state as the note says it.
 func healthWord(s apiv1.HealthState) string {
 	switch s {
@@ -438,6 +477,8 @@ func healthWord(s apiv1.HealthState) string {
 		return "unusable"
 	case apiv1.HealthState_HEALTH_STATE_OK:
 		return "OK"
+	case apiv1.HealthState_HEALTH_STATE_DISABLED:
+		return "disabled by its owner"
 	default:
 		return "of unknown health"
 	}

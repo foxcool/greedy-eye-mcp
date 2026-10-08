@@ -484,3 +484,84 @@ func TestHealthNote_NothingIsNotAllFine(t *testing.T) {
 		t.Errorf("an empty list must not read as all fine, got: %s", note)
 	}
 }
+
+// TestHealthNote_DisabledIsNamedNotCounted: a stood-down account is the
+// owner's decision. The note names it with since when, but the count of
+// accounts that should be working and are not leaves it out — otherwise one
+// deliberate pause reads as "1 of 2 accounts OK".
+func TestHealthNote_DisabledIsNamedNotCounted(t *testing.T) {
+	since := time.Date(2026, 10, 8, 5, 8, 34, 0, time.UTC)
+	note := healthNote(&apiv1.GetAccountHealthResponse{
+		Accounts: []*apiv1.AccountHealth{
+			{AccountName: "binance", State: apiv1.HealthState_HEALTH_STATE_OK},
+			{AccountName: "lapsed", State: apiv1.HealthState_HEALTH_STATE_DISABLED, Reasons: []*apiv1.HealthReason{
+				{Kind: apiv1.HealthReasonKind_HEALTH_REASON_KIND_DISABLED, Message: "disabled by its owner", Since: timestamppb.New(since)},
+			}},
+		},
+		Sources:      []*apiv1.SourceHealth{{Provider: "moex", State: apiv1.HealthState_HEALTH_STATE_OK}},
+		SourcesState: apiv1.HealthState_HEALTH_STATE_OK,
+	})
+
+	for _, want := range []string{
+		`Account "lapsed" is disabled by its owner since 2026-10-08T05:08:34Z: nothing syncs it or takes it as a provider.`,
+		"All 1 active account OK.",
+	} {
+		if !strings.Contains(note, want) {
+			t.Errorf("health note must contain %q, got: %s", want, note)
+		}
+	}
+	if strings.Contains(note, "1 of 2") {
+		t.Errorf("a disabled account must not count as one that fails, got: %s", note)
+	}
+
+	off := func(name string) *apiv1.AccountHealth {
+		return &apiv1.AccountHealth{AccountName: name, State: apiv1.HealthState_HEALTH_STATE_DISABLED}
+	}
+	ok := []*apiv1.SourceHealth{{Provider: "moex", State: apiv1.HealthState_HEALTH_STATE_OK}}
+
+	all := healthNote(&apiv1.GetAccountHealthResponse{
+		Accounts: []*apiv1.AccountHealth{off("a"), off("b")}, Sources: ok, SourcesState: apiv1.HealthState_HEALTH_STATE_OK,
+	})
+	if !strings.Contains(all, "Every account reported is disabled by its owner.") || strings.Contains(all, "All 0") {
+		t.Errorf("only disabled accounts must not read as all fine, got: %s", all)
+	}
+
+	// One account asked for by id: "every account" would overstate it.
+	one := healthNote(&apiv1.GetAccountHealthResponse{
+		Accounts: []*apiv1.AccountHealth{off("a")}, Sources: ok, SourcesState: apiv1.HealthState_HEALTH_STATE_OK,
+	})
+	if strings.Contains(one, "Every account") || !strings.Contains(one, `Account "a" is disabled by its owner:`) {
+		t.Errorf("a single disabled account is named, not generalised, got: %s", one)
+	}
+
+	mixed := healthNote(&apiv1.GetAccountHealthResponse{
+		Accounts: []*apiv1.AccountHealth{
+			off("a"),
+			{AccountName: "ok", State: apiv1.HealthState_HEALTH_STATE_OK},
+			{AccountName: "dot", State: apiv1.HealthState_HEALTH_STATE_DEGRADED, Reasons: []*apiv1.HealthReason{{Message: "chain failing"}}},
+		},
+		Sources: ok, SourcesState: apiv1.HealthState_HEALTH_STATE_OK,
+	})
+	if !strings.Contains(mixed, "1 of 2 active accounts OK.") {
+		t.Errorf("unwell is counted among active accounts only, got: %s", mixed)
+	}
+}
+
+// TestHealthNote_DisabledSourceIsAGap: for an account DISABLED is a choice,
+// for a price source it is a hole — whatever only that source priced is now
+// unpriced, and the note must not let "the owner chose it" read as "fine".
+func TestHealthNote_DisabledSourceIsAGap(t *testing.T) {
+	note := healthNote(&apiv1.GetAccountHealthResponse{
+		Accounts: []*apiv1.AccountHealth{{AccountName: "ok", State: apiv1.HealthState_HEALTH_STATE_OK}},
+		Sources: []*apiv1.SourceHealth{{Provider: "binance", State: apiv1.HealthState_HEALTH_STATE_DISABLED, Reasons: []*apiv1.HealthReason{
+			{Kind: apiv1.HealthReasonKind_HEALTH_REASON_KIND_DISABLED, Message: "a binance account that could serve prices is disabled by its owner"},
+		}}},
+		SourcesState: apiv1.HealthState_HEALTH_STATE_OK,
+	})
+	if !strings.Contains(note, "Price source binance has no enabled account to serve it, so what only it prices goes unpriced") {
+		t.Errorf("a disabled source must be spoken as a gap, got: %s", note)
+	}
+	if strings.Contains(note, "usable.") {
+		t.Errorf("a disabled source must not leave the sources reading as usable, got: %s", note)
+	}
+}
