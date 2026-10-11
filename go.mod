@@ -6,7 +6,6 @@ require (
 	connectrpc.com/connect v1.19.1
 	github.com/foxcool/greedy-eye v0.23.1
 	github.com/mark3labs/mcp-go v0.54.1
-	golang.org/x/net v0.60.0
 	google.golang.org/protobuf v1.36.11
 )
 
