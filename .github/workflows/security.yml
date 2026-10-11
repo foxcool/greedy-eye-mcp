@@ -38,23 +38,14 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-        with:
-          path: greedy-eye-mcp
-      - uses: actions/checkout@v4
-        with:
-          repository: foxcool/greedy-eye
-          ref: main
-          path: greedy-eye
 
-      - uses: actions/setup-go@v5
-        with:
-          go-version: stable
-
+      # The action ships gosec and its Go together. Building gosec@latest against
+      # setup-go's stable toolchain broke when Go outran gosec's x/tools ("export
+      # data version 5 is greater than maximum supported version 4").
       - name: Run gosec
-        working-directory: greedy-eye-mcp
-        run: |
-          go install github.com/securego/gosec/v2/cmd/gosec@latest
-          gosec -exclude-generated ./...
+        uses: securego/gosec@master
+        with:
+          args: -exclude-generated ./...
 
   gitleaks:
     name: Scan for committed secrets
