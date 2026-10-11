@@ -142,14 +142,23 @@ func unpricedPageNote(rows int, nextToken string) string {
 // answered. Collapsing them was a real defect: production reported nine ETFs as
 // "no quote at all" while the field beside it said they had been asked since
 // 2026-08-07.
+//
+// The same holds for the reasons added since: NO_CROSS_RATE is a priced position
+// missing one exchange rate, AMBIGUOUS_TICKER one no source is asked about
+// because another live asset claims its ticker. Folding either into "no quote
+// yet" points the reader at coverage work that would not help.
 func unpricedReasons(cov *apiv1.ValuationCoverage) string {
-	var noQuote, thin, never int
+	var noQuote, thin, never, noCross, ambiguous int
 	for _, u := range cov.GetUnpriced() {
 		switch u.GetReason() {
 		case apiv1.UnpricedReason_UNPRICED_REASON_THIN_MARKET:
 			thin++
 		case apiv1.UnpricedReason_UNPRICED_REASON_NEVER_PRICED:
 			never++
+		case apiv1.UnpricedReason_UNPRICED_REASON_NO_CROSS_RATE:
+			noCross++
+		case apiv1.UnpricedReason_UNPRICED_REASON_AMBIGUOUS_TICKER:
+			ambiguous++
 		default:
 			noQuote++
 		}
@@ -165,6 +174,15 @@ func unpricedReasons(cov *apiv1.ValuationCoverage) string {
 	}
 	if thin > 0 {
 		clauses = append(clauses, fmt.Sprintf("%d have a quote with no market behind it", thin))
+	}
+	if noCross > 0 {
+		clauses = append(clauses, fmt.Sprintf(
+			"%d are priced in a currency with no rate to this one (one exchange rate is missing, not coverage)", noCross))
+	}
+	if ambiguous > 0 {
+		clauses = append(clauses, fmt.Sprintf(
+			"%d share their ticker with another live asset on the same market, so no source is asked "+
+				"(quarantining whichever claimant is the impostor settles it — the listed one may be the real asset)", ambiguous))
 	}
 
 	out := fmt.Sprintf("of the %d listed, %s", len(cov.GetUnpriced()), strings.Join(clauses, ", "))

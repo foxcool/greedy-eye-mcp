@@ -565,3 +565,40 @@ func TestHealthNote_DisabledSourceIsAGap(t *testing.T) {
 		t.Errorf("a disabled source must not leave the sources reading as usable, got: %s", note)
 	}
 }
+
+// Each reason asks for different work, so each gets its own clause: a priced
+// position missing one exchange rate, or a contested ticker settled by a
+// quarantine, read as "no quote yet" would send the reader after coverage.
+func TestUnpricedReasons_EachReasonHasItsOwnClause(t *testing.T) {
+	r := func(reason apiv1.UnpricedReason) *apiv1.UnpricedHolding {
+		return &apiv1.UnpricedHolding{Reason: reason}
+	}
+	got := unpricedReasons(&apiv1.ValuationCoverage{Unpriced: []*apiv1.UnpricedHolding{
+		r(apiv1.UnpricedReason_UNPRICED_REASON_NO_QUOTE),
+		r(apiv1.UnpricedReason_UNPRICED_REASON_NO_CROSS_RATE),
+		r(apiv1.UnpricedReason_UNPRICED_REASON_AMBIGUOUS_TICKER),
+		r(apiv1.UnpricedReason_UNPRICED_REASON_AMBIGUOUS_TICKER),
+	}})
+
+	for _, want := range []string{
+		"1 have no quote yet",
+		"1 are priced in a currency with no rate",
+		"2 share their ticker with another live asset",
+		"whichever claimant is the impostor",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("want %q in: %s", want, got)
+		}
+	}
+}
+
+// The reason filter accepts the short form the tool description advertises.
+func TestUnpricedReasonFilter_AcceptsAmbiguousTicker(t *testing.T) {
+	got, err := enumValue[apiv1.UnpricedReason](apiv1.UnpricedReason(0).Descriptor(), "reason", "ambiguous_ticker")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != apiv1.UnpricedReason_UNPRICED_REASON_AMBIGUOUS_TICKER {
+		t.Errorf("got %v", got)
+	}
+}
