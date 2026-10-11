@@ -3,13 +3,10 @@ package backend
 
 import (
 	"context"
-	"crypto/tls"
-	"net"
 	"net/http"
 	"strings"
 
 	"connectrpc.com/connect"
-	"golang.org/x/net/http2"
 
 	"github.com/foxcool/greedy-eye-mcp/internal/config"
 	apiv1connect "github.com/foxcool/greedy-eye/api/v1/apiv1connect"
@@ -71,13 +68,7 @@ func transport(cfg config.Config) (connect.HTTPClient, []connect.ClientOption) {
 
 // h2cClient dials cleartext HTTP/2 (h2c) for plaintext gRPC backends.
 func h2cClient() *http.Client {
-	return &http.Client{
-		Transport: &http2.Transport{
-			AllowHTTP: true,
-			DialTLSContext: func(ctx context.Context, network, addr string, _ *tls.Config) (net.Conn, error) {
-				var d net.Dialer
-				return d.DialContext(ctx, network, addr)
-			},
-		},
-	}
+	protocols := new(http.Protocols)
+	protocols.SetUnencryptedHTTP2(true)
+	return &http.Client{Transport: &http.Transport{Protocols: protocols}}
 }
