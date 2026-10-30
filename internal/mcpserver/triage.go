@@ -55,6 +55,7 @@ func registerTriageTools(s *server.MCPServer, c *backend.Clients) {
 func registerUnbindAssetRef(s *server.MCPServer, c *backend.Clients) {
 	s.AddTool(
 		mcp.NewTool("eye_unbind_asset_ref",
+			writeTool(true, true),
 			mcp.WithDescription("Detach one external identifier (a contract, a mint, a coin id) from an asset. "+
 				"Use when a contract is bound to an asset it is not: a counterfeit token that merged into a "+
 				"real ticker inherits that asset's price and enters the total as real money. Read the bindings "+
@@ -127,6 +128,7 @@ func registerUnbindAssetRef(s *server.MCPServer, c *backend.Clients) {
 func registerSetAssetVerdict(s *server.MCPServer, c *backend.Clients) {
 	s.AddTool(
 		mcp.NewTool("eye_set_asset_verdict",
+			writeTool(true, true),
 			mcp.WithDescription("Set the identity verdict on an asset by hand. A user verdict is TERMINAL: "+
 				"rescoring never overwrites it, so this ends the automatic judgement rather than nudging it. "+
 				"scam and impersonation quarantine the asset — every holding of it leaves every total, on all "+
@@ -189,6 +191,7 @@ func registerSetAssetVerdict(s *server.MCPServer, c *backend.Clients) {
 func registerDeleteHolding(s *server.MCPServer, c *backend.Clients) {
 	s.AddTool(
 		mcp.NewTool("eye_delete_holding",
+			writeTool(true, true),
 			mcp.WithDescription("Delete one holding row. Appropriate for a manual or imported position entered "+
 				"in error. Almost never the right repair for a SYNCED position: the wallet really holds the "+
 				"token, so the next sync writes the row back and the fix reads as successful while changing "+

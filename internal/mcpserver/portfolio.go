@@ -15,6 +15,7 @@ import (
 func registerPortfolioTools(s *server.MCPServer, c *backend.Clients) {
 	s.AddTool(
 		mcp.NewTool("eye_list_portfolios",
+			readOnlyTool(),
 			mcp.WithDescription("List portfolios, optionally filtered by user."),
 			mcp.WithString("user_id", mcp.Description("Filter by owner user ID.")),
 			mcp.WithNumber("page_size", mcp.Description("Max results per page."), mcp.Min(0)),
@@ -36,6 +37,7 @@ func registerPortfolioTools(s *server.MCPServer, c *backend.Clients) {
 
 	s.AddTool(
 		mcp.NewTool("eye_get_portfolio",
+			readOnlyTool(),
 			mcp.WithDescription("Get a single portfolio by its ID."),
 			mcp.WithString("id", mcp.Required(), mcp.Description("Portfolio UUID.")),
 		),
@@ -54,6 +56,7 @@ func registerPortfolioTools(s *server.MCPServer, c *backend.Clients) {
 
 	s.AddTool(
 		mcp.NewTool("eye_list_accounts",
+			readOnlyTool(),
 			mcp.WithDescription("List accounts (wallets, exchanges, manual sources), optionally filtered by type. "+
 				"Secrets in account data are masked. Use this to find an existing account before creating one. "+
 				"An account with `disabled: true` was stood down by its owner (since `disabled_at`): it keeps its "+
@@ -87,6 +90,7 @@ func registerPortfolioTools(s *server.MCPServer, c *backend.Clients) {
 
 	s.AddTool(
 		mcp.NewTool("eye_list_holdings",
+			readOnlyTool(),
 			mcp.WithDescription("List holdings, optionally filtered by portfolio, account, or asset."),
 			mcp.WithString("portfolio_id", mcp.Description("Filter by portfolio UUID.")),
 			mcp.WithString("account_id", mcp.Description("Filter by account UUID.")),
@@ -112,6 +116,7 @@ func registerPortfolioTools(s *server.MCPServer, c *backend.Clients) {
 
 	s.AddTool(
 		mcp.NewTool("eye_list_unpriced_holdings",
+			readOnlyTool(),
 			mcp.WithDescription("Walk the positions a valuation leaves out of its total. "+
 				"This is the worklist behind `coverage.unpriced`, which is only a capped sample: "+
 				"the count there is exact, the list is a prefix. Here the whole tail is reachable, "+
@@ -170,6 +175,7 @@ func registerPortfolioTools(s *server.MCPServer, c *backend.Clients) {
 
 	s.AddTool(
 		mcp.NewTool("eye_calculate_portfolio_value",
+			readOnlyTool(),
 			mcp.WithDescription("Compute the total value of a portfolio in a quote currency. "+
 				"Read-only: it values holdings, it does not change anything. "+
 				"Adds a human-readable total alongside the raw scaled integer. "+
@@ -206,6 +212,7 @@ func registerPortfolioTools(s *server.MCPServer, c *backend.Clients) {
 
 	s.AddTool(
 		mcp.NewTool("eye_sync_account",
+			writeTool(true, false),
 			mcp.WithDescription("Re-read one account's holdings from its source. A data-refresh "+
 				"action: it upserts assets and holdings for the account and moves no funds. "+
 				"Wallet, exchange and broker accounts can be synced; a manual account cannot, "+
@@ -237,6 +244,7 @@ func registerPortfolioTools(s *server.MCPServer, c *backend.Clients) {
 
 	s.AddTool(
 		mcp.NewTool("eye_get_account_health",
+			readOnlyTool(),
 			mcp.WithDescription("Say, per account, whether it is producing anything and if not why — "+
 				"and the same for every price source the caller's prices depend on, shared ones "+
 				"included (named by provider only). Answers 'the account is configured and nothing "+

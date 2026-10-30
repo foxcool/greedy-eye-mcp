@@ -16,6 +16,7 @@ import (
 func registerAnalyticsTools(s *server.MCPServer, c *backend.Clients) {
 	s.AddTool(
 		mcp.NewTool("eye_get_heatmap",
+			readOnlyTool(),
 			mcp.WithDescription("Portfolio heatmap: treemap nodes where size = holding value in the "+
 				"quote asset and color_value = price change % over the window. Group nodes (empty "+
 				"parent_id, no asset_id) aggregate their children. "+
