@@ -47,6 +47,7 @@ func parseProtoArray[T proto.Message](raw string, mk func() T) ([]T, error) {
 func registerMutatingTools(s *server.MCPServer, c *backend.Clients) {
 	s.AddTool(
 		mcp.NewTool("eye_create_manual_account",
+			writeTool(false, false),
 			mcp.WithDescription("Create a manual account: no connector or credentials, positions are entered "+
 				"by hand or imported via eye_import_positions. Use one account per real-world source "+
 				"(a broker, a bank, a cold wallet)."),
@@ -76,6 +77,7 @@ func registerMutatingTools(s *server.MCPServer, c *backend.Clients) {
 
 	s.AddTool(
 		mcp.NewTool("eye_find_or_create_asset",
+			writeTool(false, true),
 			mcp.WithDescription("Resolve an asset by (symbol, market, type), creating it only when nothing "+
 				"matches and dry_run is false. Find-first: always prefer an existing asset over creating "+
 				"a duplicate. Market is implied only for cryptocurrency (crypto) and forex (forex); for "+
@@ -117,6 +119,7 @@ func registerMutatingTools(s *server.MCPServer, c *backend.Clients) {
 
 	s.AddTool(
 		mcp.NewTool("eye_import_positions",
+			writeTool(true, false),
 			mcp.WithDescription("Batch-import positions into a MANUAL account. Simulation-first workflow: "+
 				"ALWAYS call with dry_run=true first, show the returned plan (create/update/skip per item, "+
 				"assets to be created) to the user, and only after explicit confirmation repeat the exact "+
@@ -168,6 +171,7 @@ func registerMutatingTools(s *server.MCPServer, c *backend.Clients) {
 
 	s.AddTool(
 		mcp.NewTool("eye_import_transactions",
+			writeTool(false, true),
 			mcp.WithDescription("Batch-import transaction history into a MANUAL account. Same simulation-first "+
 				"workflow as eye_import_positions: dry_run=true, confirm the plan, then commit. Duplicates are "+
 				"skipped by external_id or the (type, asset, date, amount) tuple, so re-importing the same "+
@@ -212,6 +216,7 @@ func registerMutatingTools(s *server.MCPServer, c *backend.Clients) {
 
 	s.AddTool(
 		mcp.NewTool("eye_reset_sweep_schedule",
+			writeTool(true, true),
 			mcp.WithDescription("Forgive the price-sweep back-off accrued against named sources: their assets "+
 				"become due again instead of waiting out a deferral earned under conditions that no longer hold. "+
 				"Use when a source was unreachable or was being asked for assets it never covered, and its "+

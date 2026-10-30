@@ -18,6 +18,7 @@ import (
 func registerAutomationTools(s *server.MCPServer, c *backend.Clients) {
 	s.AddTool(
 		mcp.NewTool("eye_list_rules",
+			readOnlyTool(),
 			mcp.WithDescription("List automation rules, with optional filters."),
 			mcp.WithString("user_id", mcp.Description("Filter by user ID.")),
 			mcp.WithString("portfolio_id", mcp.Description("Filter by portfolio UUID.")),
@@ -60,6 +61,7 @@ func registerAutomationTools(s *server.MCPServer, c *backend.Clients) {
 
 	s.AddTool(
 		mcp.NewTool("eye_get_rule",
+			readOnlyTool(),
 			mcp.WithDescription("Get a single automation rule by its ID."),
 			mcp.WithString("id", mcp.Required(), mcp.Description("Rule UUID.")),
 		),
@@ -78,6 +80,7 @@ func registerAutomationTools(s *server.MCPServer, c *backend.Clients) {
 
 	s.AddTool(
 		mcp.NewTool("eye_simulate_rule",
+			readOnlyTool(),
 			mcp.WithDescription("Simulate (dry-run) what a rule would do, without executing it. "+
 				"Safe: produces an estimate of trades/withdrawals/costs only."),
 			mcp.WithString("rule_id", mcp.Required(), mcp.Description("Rule UUID to simulate.")),

@@ -15,6 +15,7 @@ import (
 func registerMarketDataTools(s *server.MCPServer, c *backend.Clients) {
 	s.AddTool(
 		mcp.NewTool("eye_list_assets",
+			readOnlyTool(),
 			mcp.WithDescription("List financial assets (crypto, stocks, etc.) tracked in greedy-eye. "+
 				"Search with `query` rather than paging the catalogue: it is thousands of rows, most of them airdrop spam."),
 			mcp.WithString("query", mcp.Description("Text search: symbol by prefix, name by substring (case-insensitive), "+
@@ -38,6 +39,7 @@ func registerMarketDataTools(s *server.MCPServer, c *backend.Clients) {
 
 	s.AddTool(
 		mcp.NewTool("eye_get_asset",
+			readOnlyTool(),
 			mcp.WithDescription("Get a single asset by its ID."),
 			mcp.WithString("id", mcp.Required(), mcp.Description("Asset UUID.")),
 		),
@@ -56,6 +58,7 @@ func registerMarketDataTools(s *server.MCPServer, c *backend.Clients) {
 
 	s.AddTool(
 		mcp.NewTool("eye_get_latest_price",
+			readOnlyTool(),
 			mcp.WithDescription("Get the latest price of an asset quoted against a base asset. "+
 				"Adds a human-readable price alongside the raw scaled integer."),
 			mcp.WithString("asset_id", mcp.Required(), mcp.Description("Asset UUID being priced.")),
@@ -90,6 +93,7 @@ func registerMarketDataTools(s *server.MCPServer, c *backend.Clients) {
 
 	s.AddTool(
 		mcp.NewTool("eye_list_price_history",
+			readOnlyTool(),
 			mcp.WithDescription("List historical prices for an asset/base pair, optionally bounded by a time range."),
 			mcp.WithString("asset_id", mcp.Required(), mcp.Description("Asset UUID.")),
 			mcp.WithString("base_asset_id", mcp.Required(), mcp.Description("Base/quote asset UUID.")),
@@ -139,6 +143,7 @@ func registerMarketDataTools(s *server.MCPServer, c *backend.Clients) {
 
 	s.AddTool(
 		mcp.NewTool("eye_fetch_external_prices",
+			writeTool(false, false),
 			mcp.WithDescription("Refresh prices from external sources (CoinGecko, Binance) and store them. "+
 				"A data-refresh action: it writes prices but moves no funds. "+
 				"Defaults to all assets and all configured sources."),
@@ -160,6 +165,7 @@ func registerMarketDataTools(s *server.MCPServer, c *backend.Clients) {
 
 	s.AddTool(
 		mcp.NewTool("eye_get_sweep_schedule",
+			readOnlyTool(),
 			mcp.WithDescription("Show the price sweep's queue per source: how many assets are due now, how many "+
 				"are deferred by back-off, and how deep that back-off runs (max_misses). "+
 				"Answers why prices are not moving when a fetch reports nothing fetched — "+
