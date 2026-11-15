@@ -259,18 +259,12 @@ func registerMutatingTools(s *server.MCPServer, c *backend.Clients) {
 						plan = append(plan, map[string]any{"source_id": id, "error": "no such price source — the reset would fail with NotFound"})
 						continue
 					}
-					plan = append(plan, map[string]any{
-						"source_id":       id,
-						"would_free":      s.GetDeferred(),
-						"due_now":         s.GetDueNow(),
-						"max_misses":      s.GetMaxMisses(),
-						"latest_deferred": s.GetLatestDeferred().AsTime().Format(time.RFC3339),
-					})
+					plan = append(plan, resetPlanEntry(id, s))
 				}
 				return resultJSON(map[string]any{
 					"dry_run": true,
 					"plan":    plan,
-					"note": "would_free counts assets currently deferred; rows carrying misses but already due are " +
+					"note": "would_free counts assets currently deferred plus unaskable ones; rows carrying misses but already due are " +
 						"reset too, so the committed assets_freed can exceed it. Repeat with dry_run=false to commit.",
 				})
 			}
@@ -281,9 +275,27 @@ func registerMutatingTools(s *server.MCPServer, c *backend.Clients) {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 			return resultProtoWith(resp.Msg, map[string]any{
-				"note": "Back-off withdrawn. Confirm with eye_get_sweep_schedule: deferred should fall and " +
-					"due_now rise by roughly the same amount. Zero freed means the schedule was already clear.",
+				"note": "Back-off withdrawn. Confirm with eye_get_sweep_schedule: deferred and unaskable should fall " +
+					"and due_now rise by roughly the same amount. Zero freed means the schedule was already clear.",
 			})
 		},
 	)
+}
+
+// resetPlanEntry is the dry-run line for one known source. The reset clears
+// unaskable deferrals as well as ordinary back-off, and unaskable rows are not
+// counted in deferred, so both feed would_free. latest_deferred is left out
+// when the backend sent none: a nil timestamp would format as the epoch.
+func resetPlanEntry(id string, s *apiv1.SourceSchedule) map[string]any {
+	e := map[string]any{
+		"source_id":  id,
+		"would_free": s.GetDeferred() + s.GetUnaskable(),
+		"unaskable":  s.GetUnaskable(),
+		"due_now":    s.GetDueNow(),
+		"max_misses": s.GetMaxMisses(),
+	}
+	if ts := s.GetLatestDeferred(); ts != nil {
+		e["latest_deferred"] = ts.AsTime().Format(time.RFC3339)
+	}
+	return e
 }
