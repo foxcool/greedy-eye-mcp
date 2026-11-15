@@ -211,6 +211,40 @@ func registerPortfolioTools(s *server.MCPServer, c *backend.Clients) {
 	)
 
 	s.AddTool(
+		mcp.NewTool("eye_get_account_health",
+			readOnlyTool(),
+			mcp.WithDescription("Say, per account, whether it is producing anything and if not why — "+
+				"and the same for every price source the caller's prices depend on, shared ones "+
+				"included (named by provider only). Answers 'the account is configured and nothing "+
+				"moves': a credential that cannot be built, a provider with no adapter, a duplicate "+
+				"that is never asked, a plan spent or a provider pausing after refusals, a chain of a "+
+				"wallet failing sync after sync, an account the balance sweep stood down. "+
+				"An ACCOUNT in DISABLED is the owner's own choice, not a fault: it is named but not "+
+				"counted among those that should be working. A PRICE SOURCE in DISABLED is a gap: no "+
+				"enabled account serves it, so what only it prices is unpriced. "+
+				"Report `health_note`: it names every account and source that is not OK, and says "+
+				"so when all are. A sources state of UNKNOWN means this instance cannot tell, not "+
+				"that sources are fine. Read-only; eye_reset_sweep_schedule withdraws a deferral."),
+			mcp.WithString("account_id", mcp.Description("Optional account UUID to limit the accounts to one; sources are always reported.")),
+		),
+		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			in := &apiv1.GetAccountHealthRequest{AccountId: optString(req.GetString("account_id", ""))}
+			resp, err := c.Portfolio.GetAccountHealth(ctx, connect.NewRequest(in))
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			return resultProtoWith(resp.Msg, map[string]any{
+				"health_note": healthNote(resp.Msg),
+			})
+		},
+	)
+}
+
+// registerSyncAccount is gated behind ENABLE_MUTATIONS with the write tools: a
+// sync calls the account's provider and upserts assets and holdings (and can
+// create accounts for a broker credential), with no dry_run.
+func registerSyncAccount(s *server.MCPServer, c *backend.Clients) {
+	s.AddTool(
 		mcp.NewTool("eye_sync_account",
 			writeTool(true, false),
 			mcp.WithDescription("Re-read one account's holdings from its source. A data-refresh "+
@@ -238,35 +272,6 @@ func registerPortfolioTools(s *server.MCPServer, c *backend.Clients) {
 			}
 			return resultProtoWith(resp.Msg, map[string]any{
 				"sync_note": syncNote(resp.Msg),
-			})
-		},
-	)
-
-	s.AddTool(
-		mcp.NewTool("eye_get_account_health",
-			readOnlyTool(),
-			mcp.WithDescription("Say, per account, whether it is producing anything and if not why — "+
-				"and the same for every price source the caller's prices depend on, shared ones "+
-				"included (named by provider only). Answers 'the account is configured and nothing "+
-				"moves': a credential that cannot be built, a provider with no adapter, a duplicate "+
-				"that is never asked, a plan spent or a provider pausing after refusals, a chain of a "+
-				"wallet failing sync after sync, an account the balance sweep stood down. "+
-				"An ACCOUNT in DISABLED is the owner's own choice, not a fault: it is named but not "+
-				"counted among those that should be working. A PRICE SOURCE in DISABLED is a gap: no "+
-				"enabled account serves it, so what only it prices is unpriced. "+
-				"Report `health_note`: it names every account and source that is not OK, and says "+
-				"so when all are. A sources state of UNKNOWN means this instance cannot tell, not "+
-				"that sources are fine. Read-only; eye_reset_sweep_schedule withdraws a deferral."),
-			mcp.WithString("account_id", mcp.Description("Optional account UUID to limit the accounts to one; sources are always reported.")),
-		),
-		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			in := &apiv1.GetAccountHealthRequest{AccountId: optString(req.GetString("account_id", ""))}
-			resp, err := c.Portfolio.GetAccountHealth(ctx, connect.NewRequest(in))
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
-			}
-			return resultProtoWith(resp.Msg, map[string]any{
-				"health_note": healthNote(resp.Msg),
 			})
 		},
 	)

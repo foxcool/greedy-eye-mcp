@@ -90,7 +90,12 @@ portfolio.
 With `ENABLE_MUTATIONS=true`, write tools for manual portfolio import are added:
 
 - `eye_create_manual_account` — account without a connector; positions enter by hand or import
-- `eye_find_or_create_asset` — find-first asset resolution by (symbol, market, type)
+- `eye_find_or_create_asset` — find-first asset resolution by (symbol, market, type); `dry_run` defaults to **true**, commit with `dry_run=false`
+- `eye_fetch_external_prices` — refresh prices from external sources (spends provider quota)
+- `eye_sync_account` — re-read one account from its source (calls the provider, upserts holdings)
+
+`eye_fetch_external_prices` and `eye_sync_account` have no `dry_run`; they are
+gated because they spend provider quota and write rows, though they move no funds.
 - `eye_import_positions`, `eye_import_transactions` — batch import with a
   simulation-first contract: `dry_run` defaults to **true** and returns a
   per-item plan (create/update/skip); commit only after the user confirms,

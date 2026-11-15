@@ -50,6 +50,8 @@ func New(cfg config.Config, clients *backend.Clients) *server.MCPServer {
 	if cfg.EnableMutations {
 		registerMutatingTools(s, clients)
 		registerTriageTools(s, clients)
+		registerFetchExternalPrices(s, clients)
+		registerSyncAccount(s, clients)
 	}
 
 	return s

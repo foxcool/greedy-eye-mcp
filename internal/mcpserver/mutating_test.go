@@ -4,6 +4,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mark3labs/mcp-go/mcp"
+
 	apiv1 "github.com/foxcool/greedy-eye/api/v1"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -26,5 +28,24 @@ func TestResetPlanEntryOmitsAbsentLatestDeferred(t *testing.T) {
 	e := resetPlanEntry("moex", &apiv1.SourceSchedule{LatestDeferred: timestamppb.New(ts)})
 	if e["latest_deferred"] != "2026-01-02T03:04:05Z" {
 		t.Errorf("latest_deferred = %v", e["latest_deferred"])
+	}
+}
+
+func TestFindOrCreateAssetDefaultsToDryRun(t *testing.T) {
+	call := func(args map[string]any) *apiv1.FindOrCreateAssetRequest {
+		t.Helper()
+		var req mcp.CallToolRequest
+		req.Params.Arguments = args
+		in, err := findOrCreateAssetRequest(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return in
+	}
+	if !call(map[string]any{"symbol": "BTC"}).GetDryRun() {
+		t.Error("dry_run omitted: want true, got false")
+	}
+	if call(map[string]any{"symbol": "BTC", "dry_run": false}).GetDryRun() {
+		t.Error("explicit dry_run=false must commit")
 	}
 }
