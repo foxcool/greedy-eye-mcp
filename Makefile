@@ -2,6 +2,13 @@
 
 BIN := bin/server
 
+# Stamp the build so the running binary can say what it is (see internal/buildinfo).
+PKG := github.com/foxcool/greedy-eye-mcp/internal/buildinfo
+VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+COMMIT ?= $(shell git rev-parse HEAD 2>/dev/null)
+DATE ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
+LDFLAGS := -X $(PKG).Version=$(VERSION) -X $(PKG).Commit=$(COMMIT) -X $(PKG).Date=$(DATE)
+
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
 		awk 'BEGIN{FS=":.*?## "}{printf "  %-16s %s\n", $$1, $$2}'
@@ -12,7 +19,7 @@ tidy: ## Resolve and pin module dependencies
 	go mod tidy
 
 build: ## Build the server binary into bin/
-	go build -trimpath -o $(BIN) ./cmd/server
+	go build -trimpath -ldflags "$(LDFLAGS)" -o $(BIN) ./cmd/server
 
 test: ## Run unit tests
 	go test ./...

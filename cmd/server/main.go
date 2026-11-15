@@ -12,6 +12,7 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 
 	"github.com/foxcool/greedy-eye-mcp/internal/backend"
+	"github.com/foxcool/greedy-eye-mcp/internal/buildinfo"
 	"github.com/foxcool/greedy-eye-mcp/internal/config"
 	"github.com/foxcool/greedy-eye-mcp/internal/mcpserver"
 )
@@ -30,6 +31,7 @@ func main() {
 	s := mcpserver.New(cfg, clients)
 
 	logger.Info("starting MCP stdio server",
+		"build", buildinfo.String(),
 		"backend", cfg.BackendURL,
 		"protocol", cfg.Protocol,
 		"mutations_enabled", cfg.EnableMutations,

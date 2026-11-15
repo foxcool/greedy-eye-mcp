@@ -16,6 +16,9 @@ builds:
       - -trimpath
     ldflags:
       - -s -w
+      - -X github.com/foxcool/greedy-eye-mcp/internal/buildinfo.Version={{ .Version }}
+      - -X github.com/foxcool/greedy-eye-mcp/internal/buildinfo.Commit={{ .FullCommit }}
+      - -X github.com/foxcool/greedy-eye-mcp/internal/buildinfo.Date={{ .Date }}
     goos:
       - linux
       - darwin
