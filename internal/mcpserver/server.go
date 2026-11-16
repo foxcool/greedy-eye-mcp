@@ -22,7 +22,9 @@ const serverInstructions = `greedy-eye portfolio tools. Money amounts are raw in
 'decimals' field unless a *_human field is present. Write tools (when enabled)
 follow a simulation-first contract: they default to dry_run=true and return a
 plan — show the plan to the user and get explicit confirmation before repeating
-the call with dry_run=false. Never invent amounts or symbols: ask the user when
+the call with dry_run=false. Two have no plan and act at once:
+eye_fetch_external_prices and eye_sync_account spend provider quota and write
+rows when called, so confirm with the user before calling them. Never invent amounts or symbols: ask the user when
 an export is ambiguous. When a total looks wrong, suspect identity before
 arithmetic: eye_get_asset reports the bindings and signals behind an asset, and
 the triage tools repair them.`
@@ -52,6 +54,8 @@ func New(cfg config.Config, clients *backend.Clients) *server.MCPServer {
 	if cfg.EnableMutations {
 		registerMutatingTools(s, clients)
 		registerTriageTools(s, clients)
+		registerFetchExternalPrices(s, clients)
+		registerSyncAccount(s, clients)
 	}
 
 	return s

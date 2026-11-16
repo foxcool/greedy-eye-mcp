@@ -142,6 +142,30 @@ func registerMarketDataTools(s *server.MCPServer, c *backend.Clients) {
 	)
 
 	s.AddTool(
+		mcp.NewTool("eye_get_sweep_schedule",
+			readOnlyTool(),
+			mcp.WithDescription("Show the price sweep's queue per source: how many assets are due now, how many "+
+				"are deferred by back-off, and how deep that back-off runs (max_misses). "+
+				"Answers why prices are not moving when a fetch reports nothing fetched — "+
+				"'everything is current' and 'the whole catalogue is postponed' look identical otherwise. "+
+				"A latest_deferred a week out is the signature of assets that hit the back-off ceiling. "+
+				"Read-only; eye_reset_sweep_schedule is what withdraws a deferral."),
+		),
+		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			resp, err := c.MarketData.GetSweepSchedule(ctx, connect.NewRequest(&apiv1.GetSweepScheduleRequest{}))
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			return resultProto(resp.Msg)
+		},
+	)
+}
+
+// registerFetchExternalPrices is gated behind ENABLE_MUTATIONS with the write
+// tools: a fetch spends the backend's provider quota and writes price rows, and
+// it has no dry_run, so it cannot be offered as a read.
+func registerFetchExternalPrices(s *server.MCPServer, c *backend.Clients) {
+	s.AddTool(
 		mcp.NewTool("eye_fetch_external_prices",
 			writeTool(false, false),
 			mcp.WithDescription("Refresh prices from external sources (CoinGecko, Binance) and store them. "+
@@ -156,25 +180,6 @@ func registerMarketDataTools(s *server.MCPServer, c *backend.Clients) {
 				SourceIds: req.GetStringSlice("source_ids", nil),
 			}
 			resp, err := c.MarketData.FetchExternalPrices(ctx, connect.NewRequest(in))
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
-			}
-			return resultProto(resp.Msg)
-		},
-	)
-
-	s.AddTool(
-		mcp.NewTool("eye_get_sweep_schedule",
-			readOnlyTool(),
-			mcp.WithDescription("Show the price sweep's queue per source: how many assets are due now, how many "+
-				"are deferred by back-off, and how deep that back-off runs (max_misses). "+
-				"Answers why prices are not moving when a fetch reports nothing fetched — "+
-				"'everything is current' and 'the whole catalogue is postponed' look identical otherwise. "+
-				"A latest_deferred a week out is the signature of assets that hit the back-off ceiling. "+
-				"Read-only; eye_reset_sweep_schedule is what withdraws a deferral."),
-		),
-		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			resp, err := c.MarketData.GetSweepSchedule(ctx, connect.NewRequest(&apiv1.GetSweepScheduleRequest{}))
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}

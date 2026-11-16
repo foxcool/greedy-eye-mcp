@@ -79,7 +79,7 @@ func registerMutatingTools(s *server.MCPServer, c *backend.Clients) {
 		mcp.NewTool("eye_find_or_create_asset",
 			writeTool(false, true),
 			mcp.WithDescription("Resolve an asset by (symbol, market, type), creating it only when nothing "+
-				"matches and dry_run is false. Find-first: always prefer an existing asset over creating "+
+				"matches and dry_run is false (dry_run defaults to true: show the result, confirm, then commit). Find-first: always prefer an existing asset over creating "+
 				"a duplicate. Market is implied only for cryptocurrency (crypto) and forex (forex); for "+
 				"stock, bond, fund and commodity it is required, and it is validated before the lookup — "+
 				"so it must be passed even when the asset already exists."),
@@ -90,24 +90,12 @@ func registerMutatingTools(s *server.MCPServer, c *backend.Clients) {
 				"the exchange-traded part is carried by market."),
 				mcp.Enum("", "cryptocurrency", "stock", "bond", "commodity", "forex", "fund", "etf")),
 			mcp.WithString("name", mcp.Description("Asset name when created; defaults to the symbol.")),
-			mcp.WithBoolean("dry_run", mcp.Description("When true, only reports whether the asset exists or would be created.")),
+			mcp.WithBoolean("dry_run", mcp.Description("Report whether the asset exists or would be created, without writing. Defaults to true — pass false only to commit a confirmed plan.")),
 		),
 		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			symbol, err := req.RequireString("symbol")
+			in, err := findOrCreateAssetRequest(req)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
-			}
-			assetType, err := enumValue[apiv1.AssetType](
-				apiv1.AssetType_ASSET_TYPE_UNSPECIFIED.Descriptor(), "type", req.GetString("type", ""))
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
-			}
-			in := &apiv1.FindOrCreateAssetRequest{
-				Symbol: symbol,
-				Market: optString(req.GetString("market", "")),
-				Type:   assetType,
-				Name:   optString(req.GetString("name", "")),
-				DryRun: req.GetBool("dry_run", false),
 			}
 			resp, err := c.MarketData.FindOrCreateAsset(ctx, connect.NewRequest(in))
 			if err != nil {
@@ -298,4 +286,26 @@ func resetPlanEntry(id string, s *apiv1.SourceSchedule) map[string]any {
 		e["latest_deferred"] = ts.AsTime().Format(time.RFC3339)
 	}
 	return e
+}
+
+// findOrCreateAssetRequest maps the tool's arguments onto the RPC. dry_run
+// defaults to true like every other write tool: creating an asset is a write,
+// so the plan comes first and a commit needs an explicit dry_run=false.
+func findOrCreateAssetRequest(req mcp.CallToolRequest) (*apiv1.FindOrCreateAssetRequest, error) {
+	symbol, err := req.RequireString("symbol")
+	if err != nil {
+		return nil, err
+	}
+	assetType, err := enumValue[apiv1.AssetType](
+		apiv1.AssetType_ASSET_TYPE_UNSPECIFIED.Descriptor(), "type", req.GetString("type", ""))
+	if err != nil {
+		return nil, err
+	}
+	return &apiv1.FindOrCreateAssetRequest{
+		Symbol: symbol,
+		Market: optString(req.GetString("market", "")),
+		Type:   assetType,
+		Name:   optString(req.GetString("name", "")),
+		DryRun: req.GetBool("dry_run", true), // default to the safe path
+	}, nil
 }
