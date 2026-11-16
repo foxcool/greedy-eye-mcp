@@ -1,6 +1,7 @@
 package mcpserver
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/foxcool/greedy-eye-mcp/internal/backend"
@@ -15,6 +16,27 @@ var writeToolNames = []string{
 	"eye_reset_sweep_schedule", "eye_unbind_asset_ref",
 	"eye_set_asset_verdict", "eye_delete_holding",
 	"eye_fetch_external_prices", "eye_sync_account",
+}
+
+// The instructions promise dry_run=true by default and name the write tools
+// that act at once. A write tool without a dry_run parameter that the text does
+// not name turns a client's "first call is a plan" into a real write.
+func TestInstructionsNameEveryWriteToolWithoutDryRun(t *testing.T) {
+	on := New(config.Config{EnableMutations: true}, &backend.Clients{}).ListTools()
+	for _, name := range writeToolNames {
+		st, ok := on[name]
+		if !ok {
+			t.Fatalf("%s missing with mutations on", name)
+		}
+		_, hasDryRun := st.Tool.InputSchema.Properties["dry_run"]
+		named := strings.Contains(serverInstructions, name)
+		if !hasDryRun && !named {
+			t.Errorf("%s has no dry_run but the instructions do not name it as acting at once", name)
+		}
+		if hasDryRun && named {
+			t.Errorf("%s has dry_run but the instructions name it as acting at once", name)
+		}
+	}
 }
 
 func TestToolSetFollowsMutationsGate(t *testing.T) {
