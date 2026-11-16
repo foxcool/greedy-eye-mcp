@@ -44,6 +44,24 @@ Prebuilt binaries per OS/arch are published as archives via
 [GoReleaser](https://goreleaser.com) (`make release`); `make snapshot` builds
 them locally into `dist/`.
 
+## Checking which build is running
+
+A local `bin/server` is an untracked build that no release updates, so it can
+drift from the released binary. The server states its build three ways:
+
+- **stderr at startup** — the `starting MCP stdio server` log line has a `build`
+  field (client MCP logs usually capture it).
+- **MCP server info** — the `version` the server returns on connect.
+- **Tool** — `eye_get_server_version` returns the same string.
+
+The string looks like `v0.3.0 (commit 0123456789ab, built 2026-03-04T05:06:07Z)`.
+`make build` and the release build inject the version, commit and time. A plain
+`go build` has none, so it reports `dev` plus the embedded VCS revision, with
+`-dirty` appended for a modified tree.
+
+The backend's version is not reported alongside: the pinned backend API has no
+version or build RPC to ask for it.
+
 ## Configuration
 
 All configuration is via environment variables:

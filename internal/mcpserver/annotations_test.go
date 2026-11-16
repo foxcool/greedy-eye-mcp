@@ -17,6 +17,7 @@ var (
 	// toolClassification is the reviewed read/write table. A new tool must be
 	// added here: the test fails on any registered tool it does not list.
 	toolClassification = map[string]toolHints{
+		"eye_get_server_version":        readHints,
 		"eye_list_portfolios":           readHints,
 		"eye_get_portfolio":             readHints,
 		"eye_list_accounts":             readHints,

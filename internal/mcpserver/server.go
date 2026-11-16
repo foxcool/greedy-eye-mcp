@@ -4,16 +4,17 @@
 package mcpserver
 
 import (
+	"context"
+
+	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 
 	"github.com/foxcool/greedy-eye-mcp/internal/backend"
+	"github.com/foxcool/greedy-eye-mcp/internal/buildinfo"
 	"github.com/foxcool/greedy-eye-mcp/internal/config"
 )
 
-const (
-	serverName    = "greedy-eye-mcp"
-	serverVersion = "0.1.0"
-)
+const serverName = "greedy-eye-mcp"
 
 // serverInstructions is returned to the client on initialize. Keep it short:
 // the full import workflow lives in docs/importing.md.
@@ -31,12 +32,13 @@ the triage tools repair them.`
 func New(cfg config.Config, clients *backend.Clients) *server.MCPServer {
 	s := server.NewMCPServer(
 		serverName,
-		serverVersion,
+		buildinfo.String(),
 		server.WithToolCapabilities(true),
 		server.WithInstructions(serverInstructions),
 	)
 
 	// Read-only tools are always registered.
+	registerVersionTool(s)
 	registerMarketDataTools(s, clients)
 	registerPortfolioTools(s, clients)
 	registerAutomationTools(s, clients)
@@ -53,4 +55,20 @@ func New(cfg config.Config, clients *backend.Clients) *server.MCPServer {
 	}
 
 	return s
+}
+
+// registerVersionTool lets a client ask which build is running. The same string
+// is the MCP server info version and the startup log line; the tool covers
+// clients that do not surface server info. The backend's own version is not
+// reported: the pinned backend API has no version or build RPC to ask.
+func registerVersionTool(s *server.MCPServer) {
+	s.AddTool(
+		mcp.NewTool("eye_get_server_version",
+			readOnlyTool(),
+			mcp.WithDescription("Report which build of the greedy-eye MCP server is running (version, commit, build time). Use it when a tool is missing or behaviour looks stale."),
+		),
+		func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			return mcp.NewToolResultText(buildinfo.String()), nil
+		},
+	)
 }
