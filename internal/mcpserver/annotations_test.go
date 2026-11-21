@@ -48,6 +48,7 @@ var (
 		"eye_unbind_asset_ref":     {destructive: true, idempotent: true},
 		"eye_set_asset_verdict":    {destructive: true, idempotent: true},
 		"eye_delete_holding":       {destructive: true, idempotent: true},
+		"eye_merge_assets":         {destructive: true},
 	}
 )
 
