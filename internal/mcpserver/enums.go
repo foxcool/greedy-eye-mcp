@@ -59,8 +59,8 @@ func enumValue[E ~int32](ed protoreflect.EnumDescriptor, field, raw string) (E, 
 
 // normalizeEnumFields rewrites enum-typed string fields of a JSON object to their
 // canonical member names, so short forms and aliases survive protojson's strict
-// matching. Only top-level fields are walked: the import item types carry no
-// nested messages holding enums.
+// matching. Nested messages are walked too, singular or repeated: a ledger
+// import item carries its direction and role enums on each leg.
 func normalizeEnumFields(md protoreflect.MessageDescriptor, raw json.RawMessage) (json.RawMessage, error) {
 	var obj map[string]json.RawMessage
 	if err := json.Unmarshal(raw, &obj); err != nil {
@@ -71,11 +71,22 @@ func normalizeEnumFields(md protoreflect.MessageDescriptor, raw json.RawMessage)
 	fields := md.Fields()
 	for i := range fields.Len() {
 		fd := fields.Get(i)
-		if fd.Kind() != protoreflect.EnumKind || fd.IsList() || fd.IsMap() {
+		key, ok := jsonKey(obj, fd)
+		if !ok || fd.IsMap() {
 			continue
 		}
-		key, ok := jsonKey(obj, fd)
-		if !ok {
+		if fd.Kind() == protoreflect.MessageKind {
+			nested, err := normalizeNested(fd, obj[key])
+			if err != nil {
+				return nil, err
+			}
+			if nested != nil {
+				obj[key] = nested
+				changed = true
+			}
+			continue
+		}
+		if fd.Kind() != protoreflect.EnumKind || fd.IsList() {
 			continue
 		}
 		var s string
@@ -97,6 +108,32 @@ func normalizeEnumFields(md protoreflect.MessageDescriptor, raw json.RawMessage)
 		return raw, nil
 	}
 	return json.Marshal(obj)
+}
+
+// normalizeNested normalizes a message-typed field: one object, or each object
+// of a list. It returns nil when nothing changed or the value is not the shape
+// the field declares (protojson reports that).
+func normalizeNested(fd protoreflect.FieldDescriptor, raw json.RawMessage) (json.RawMessage, error) {
+	md := fd.Message()
+	if !fd.IsList() {
+		out, err := normalizeEnumFields(md, raw)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", fd.Name(), err)
+		}
+		return out, nil
+	}
+	var elems []json.RawMessage
+	if err := json.Unmarshal(raw, &elems); err != nil {
+		return nil, nil
+	}
+	for i, e := range elems {
+		out, err := normalizeEnumFields(md, e)
+		if err != nil {
+			return nil, fmt.Errorf("%s[%d]: %w", fd.Name(), i, err)
+		}
+		elems[i] = out
+	}
+	return json.Marshal(elems)
 }
 
 // jsonKey finds the field in a decoded object under either the proto name

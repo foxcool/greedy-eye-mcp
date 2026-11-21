@@ -80,11 +80,18 @@ UUID) so the whole import shares one batch id. Committed rows get
 ### 5. Transactions (optional)
 
 If the export contains trade/transfer history, `eye_import_transactions`
-follows the same two-step contract. Per item: `type` (required), `symbol` of
-an existing asset (transaction import never creates assets), `external_id`
-(the source's own transaction id — the primary dedup key), and `data` with at
-least `date` and `amount` so the fallback dedup heuristic works. Re-importing
-the same export is safe: duplicates come back as SKIP.
+follows the same two-step contract and writes the account's ledger. Each item
+is one event: `kind` (trade, transfer_in, transfer_out, deposit, withdrawal,
+income, fee, opening), `executed_at` (RFC 3339), `external_ref` (the source's
+own id — the primary dedup key) and `legs`, one per asset that moved. A leg
+names an existing asset by `symbol` or `asset_id` (transaction import never
+creates assets), its `direction` as seen by this account (`in`/`out`), its
+`role` (`principal` — what the event is about, `counter` — what was paid or
+received for it, `fee`, `income`) and a positive `amount`. A trade of 6000 USDT
+for 0.1 BTC with a 6 USDT fee is three legs: BTC in principal, USDT out
+counter, USDT out fee. Without `external_ref` an event is a duplicate when
+kind, time and every leg match, so re-importing the same export is safe:
+duplicates come back as SKIP.
 
 ### 6. Verify
 
