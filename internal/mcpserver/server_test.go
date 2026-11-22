@@ -14,7 +14,7 @@ var writeToolNames = []string{
 	"eye_create_manual_account", "eye_find_or_create_asset",
 	"eye_import_positions", "eye_import_transactions",
 	"eye_reset_sweep_schedule", "eye_unbind_asset_ref",
-	"eye_set_asset_verdict", "eye_delete_holding",
+	"eye_set_asset_verdict", "eye_delete_holding", "eye_merge_assets",
 	"eye_fetch_external_prices", "eye_sync_account",
 }
 

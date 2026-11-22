@@ -106,21 +106,40 @@ func TestParseProtoArrayReportsValidEnumValues(t *testing.T) {
 	}
 }
 
-func TestParseProtoArrayNormalizesTransactionType(t *testing.T) {
+func TestParseProtoArrayNormalizesLedgerEnums(t *testing.T) {
 	items, err := parseProtoArray(
-		`[{"type":"deposit","symbol":"BTC"},{"type":"TRANSACTION_TYPE_TRADE","symbol":"ETH"}]`,
+		`[{"kind":"deposit","executed_at":"2026-07-01T00:00:00Z",`+
+			`"legs":[{"symbol":"BTC","direction":"in","role":"principal","amount":"0.1"}]},`+
+			`{"kind":"LEDGER_EVENT_KIND_TRADE","executedAt":"2026-07-02T00:00:00Z",`+
+			`"legs":[{"symbol":"ETH","direction":"IN","role":"principal","amount":"1"},`+
+			`{"symbol":"USDT","direction":"out","role":"counter","amount":"3000"}]}]`,
 		func() *apiv1.ImportTransactionItem { return &apiv1.ImportTransactionItem{} },
 	)
 	if err != nil {
 		t.Fatalf("parseProtoArray: %v", err)
 	}
-	want := []apiv1.TransactionType{
-		apiv1.TransactionType_TRANSACTION_TYPE_DEPOSIT,
-		apiv1.TransactionType_TRANSACTION_TYPE_TRADE,
+	if items[0].Kind != apiv1.LedgerEventKind_LEDGER_EVENT_KIND_DEPOSIT ||
+		items[1].Kind != apiv1.LedgerEventKind_LEDGER_EVENT_KIND_TRADE {
+		t.Errorf("kinds = %v, %v", items[0].Kind, items[1].Kind)
 	}
-	for i, item := range items {
-		if item.Type != want[i] {
-			t.Errorf("item %d type = %v, want %v", i, item.Type, want[i])
+	counter := items[1].Legs[1]
+	if counter.Direction != apiv1.LedgerLegDirection_LEDGER_LEG_DIRECTION_OUT ||
+		counter.Role != apiv1.LedgerLegRole_LEDGER_LEG_ROLE_COUNTER {
+		t.Errorf("leg = %v %v, want out counter", counter.Direction, counter.Role)
+	}
+}
+
+func TestParseProtoArrayNamesTheBadLeg(t *testing.T) {
+	_, err := parseProtoArray(
+		`[{"kind":"deposit","legs":[{"direction":"in"},{"direction":"sideways"}]}]`,
+		func() *apiv1.ImportTransactionItem { return &apiv1.ImportTransactionItem{} },
+	)
+	if err == nil {
+		t.Fatal("expected an error for an unknown leg direction")
+	}
+	for _, want := range []string{"item 0", "legs[1]", "direction", "in", "out"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q does not mention %q", err, want)
 		}
 	}
 }

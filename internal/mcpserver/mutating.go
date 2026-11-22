@@ -160,18 +160,22 @@ func registerMutatingTools(s *server.MCPServer, c *backend.Clients) {
 	s.AddTool(
 		mcp.NewTool("eye_import_transactions",
 			writeTool(false, true),
-			mcp.WithDescription("Batch-import transaction history into a MANUAL account. Same simulation-first "+
-				"workflow as eye_import_positions: dry_run=true, confirm the plan, then commit. Duplicates are "+
-				"skipped by external_id or the (type, asset, date, amount) tuple, so re-importing the same "+
-				"export is safe. Never creates assets: unknown symbols fail per item."),
+			mcp.WithDescription("Batch-import movement history into a MANUAL account's ledger: each item is one "+
+				"event with one or more legs (asset movements). Same simulation-first workflow as "+
+				"eye_import_positions: dry_run=true, confirm the plan, then commit. Duplicates are skipped by "+
+				"external_ref, or without one when kind, executed_at and all legs match, so re-importing the "+
+				"same export is safe. Never creates assets: an unknown symbol fails its item."),
 			mcp.WithString("account_id", mcp.Required(), mcp.Description("Manual account UUID.")),
 			mcp.WithString("transactions", mcp.Required(), mcp.Description(
-				`JSON array of transaction items: [{"type":"deposit","symbol":"BTC",`+
-					`"external_id":"tx-1","data":{"date":"2026-07-01","amount":"0.1"}}, ...]. Fields: `+
-					`type (required: trade|transfer|deposit|withdrawal|extended), `+
-					`status (optional: pending|processing|completed|failed|cancelled, default completed), `+
-					`symbol or asset_id (optional), external_id (optional dedup key), data (optional string map; `+
-					`use date and amount keys to enable heuristic dedup).`)),
+				`JSON array of ledger events: [{"kind":"trade","executed_at":"2026-07-01T10:00:00Z",`+
+					`"external_ref":"tx-1","legs":[{"symbol":"BTC","direction":"in","role":"principal","amount":"0.1"},`+
+					`{"symbol":"USDT","direction":"out","role":"counter","amount":"6000"},`+
+					`{"symbol":"USDT","direction":"out","role":"fee","amount":"6"}]}, ...]. Event fields: `+
+					`kind (required: trade|transfer_in|transfer_out|deposit|withdrawal|income|fee|opening), executed_at (required, RFC 3339), `+
+					`external_ref (optional, the export's own id; the dedup key), raw (optional string map: the row as `+
+					`exported, stored and never returned), legs (required, at least one). Leg fields: symbol or asset_id, `+
+					`direction (in|out, as seen by this account), role (principal|counter|fee|income), amount (positive `+
+					`decimal string), decimals (optional storage scale, default 8), chain (optional).`)),
 			mcp.WithBoolean("dry_run", mcp.Description("Plan without writing. Defaults to true — pass false only to commit a confirmed plan.")),
 			mcp.WithString("import_id", mcp.Description("Batch UUID; pass the same value on the commit call to keep one id for the whole import.")),
 		),

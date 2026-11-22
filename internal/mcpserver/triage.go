@@ -48,6 +48,7 @@ func registerTriageTools(s *server.MCPServer, c *backend.Clients) {
 	registerUnbindAssetRef(s, c)
 	registerSetAssetVerdict(s, c)
 	registerDeleteHolding(s, c)
+	registerMergeAssets(s, c)
 }
 
 // registerUnbindAssetRef exposes DeleteAssetExternalRef: the repair primitive
@@ -468,4 +469,66 @@ func describeHolding(h *apiv1.Holding) map[string]any {
 		out["portfolio_id"] = h.GetPortfolioId()
 	}
 	return out
+}
+
+// registerMergeAssets exposes MergeAssets: the repair for a catalogue that holds
+// one instrument as two rows. Unlike the other triage tools the backend plans
+// it itself, by running the merge and rolling it back.
+func registerMergeAssets(s *server.MCPServer, c *backend.Clients) {
+	s.AddTool(
+		mcp.NewTool("eye_merge_assets",
+			writeTool(true, false),
+			mcp.WithDescription("Fold a duplicate catalogue asset (source) into the asset it duplicates (target): "+
+				"holdings, ledger legs, prices, external refs, risk flags and automation rules that name source move "+
+				"to target, and source is deleted. Target keeps its name, tags and verdict. IRREVERSIBLE once "+
+				"committed. Simulation-first: dry_run defaults to true and returns the counts the commit would move "+
+				"and drop; show them and repeat with dry_run=false only after the user confirms. "+
+				"Refused, writing nothing, when a symbol is not the expected one, when a provider gives the two "+
+				"different ids (they are two instruments, not a duplicate), when both hold a position under the "+
+				"same account, chain and liquidity (delete one of each named pair first, eye_delete_holding), or "+
+				"when an automation rule names both. Use eye_get_asset on both first: merging two real instruments "+
+				"cannot be undone."),
+			mcp.WithString("source_id", mcp.Required(), mcp.Description("UUID of the duplicate; it is deleted.")),
+			mcp.WithString("target_id", mcp.Required(), mcp.Description("UUID of the asset that survives.")),
+			mcp.WithString("expected_source_symbol", mcp.Required(), mcp.Description(
+				"Symbol of source as you saw it; the merge refuses if the row now differs.")),
+			mcp.WithString("expected_target_symbol", mcp.Required(), mcp.Description(
+				"Symbol of target as you saw it; the merge refuses if the row now differs.")),
+			mcp.WithBoolean("dry_run", mcp.Description(
+				"Plan without writing. Defaults to true — pass false only to commit a confirmed plan.")),
+		),
+		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			in, err := mergeAssetsRequest(req)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			resp, err := c.MarketData.MergeAssets(ctx, connect.NewRequest(in))
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			return resultProto(resp.Msg)
+		},
+	)
+}
+
+// mergeAssetsRequest builds the request, sending dry_run explicitly either way:
+// the backend also plans when it is absent, but the tool should not lean on that.
+func mergeAssetsRequest(req mcp.CallToolRequest) (*apiv1.MergeAssetsRequest, error) {
+	in := &apiv1.MergeAssetsRequest{DryRun: new(req.GetBool("dry_run", true))}
+	for _, f := range []struct {
+		name string
+		dst  *string
+	}{
+		{"source_id", &in.SourceId},
+		{"target_id", &in.TargetId},
+		{"expected_source_symbol", &in.ExpectedSourceSymbol},
+		{"expected_target_symbol", &in.ExpectedTargetSymbol},
+	} {
+		v, err := req.RequireString(f.name)
+		if err != nil {
+			return nil, err
+		}
+		*f.dst = v
+	}
+	return in, nil
 }

@@ -118,15 +118,16 @@ gated because they spend provider quota and write rows, though they move no fund
   simulation-first contract: `dry_run` defaults to **true** and returns a
   per-item plan (create/update/skip); commit only after the user confirms,
   by repeating the call with `dry_run=false`. Re-importing the same export
-  is safe (dedup by `external_id` / heuristic), and every committed row
-  carries `source=llm_import` plus a shared `import_id`.
+  is safe (dedup by `external_id` / `external_ref` or a heuristic). Committed
+  positions carry `source=llm_import` and every committed row a shared
+  `import_id`. Transactions land in the account's ledger as events with legs.
 
 The full workflow for LLM clients — parsing an export, the dry-run/confirm
 contract, verification, failure modes — is in
 [docs/importing.md](docs/importing.md).
 
 The same gate adds the **asset triage** tools, for acting on an identity error
-rather than only reading one. All three plan under `dry_run=true` by default:
+rather than only reading one. All four plan under `dry_run=true` by default:
 
 - `eye_unbind_asset_ref` — detach a contract bound to an asset it is not. The
   repair for a counterfeit that merged into a real ticker and inherited its
@@ -136,6 +137,10 @@ rather than only reading one. All three plan under `dry_run=true` by default:
   every total.
 - `eye_delete_holding` — drop one row. Says so when the row came from sync and
   the next sync will write it back.
+- `eye_merge_assets` — fold a duplicate catalogue row into the asset it
+  duplicates: holdings, ledger legs, prices, refs, flags and rules move, the
+  duplicate is deleted. Irreversible once committed; the backend refuses when
+  the two are different instruments or their positions collide.
 
 Unbinding and a verdict are deliberately separate actions. A verdict subtracts
 the whole asset everywhere; unbinding says one contract is not that asset and
