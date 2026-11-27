@@ -211,6 +211,35 @@ func registerPortfolioTools(s *server.MCPServer, c *backend.Clients) {
 	)
 
 	s.AddTool(
+		mcp.NewTool("eye_income_report",
+			readOnlyTool(),
+			mcp.WithDescription("Sum the income of one portfolio or one account over a period: a row per "+
+				"month (UTC) x income kind (coupon, dividend, interest, staking reward, other) x asset with "+
+				"gross, tax withheld and net, each valued in the display currency at its event's date. "+
+				"Income is cash flow and is never part of a portfolio total. An event with no price on its "+
+				"date adds to the amounts but not to the values and is listed in `unvalued`: report "+
+				"`income_note`, because a total that leaves such events out reads as all the income. "+
+				"Read-only."),
+			mcp.WithString("portfolio_id", mcp.Description("Portfolio UUID. Exactly one of portfolio_id and account_id.")),
+			mcp.WithString("account_id", mcp.Description("Account UUID. Exactly one of portfolio_id and account_id.")),
+			mcp.WithString("from", mcp.Required(), mcp.Description("Start, inclusive, RFC 3339 (e.g. 2026-01-01T00:00:00Z).")),
+			mcp.WithString("to", mcp.Required(), mcp.Description("End, exclusive, RFC 3339.")),
+			mcp.WithString("quote_asset_id", mcp.Description("Display currency: asset UUID or ticker. Defaults to the instance's.")),
+		),
+		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			in, err := incomeReportRequest(req)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			resp, err := c.Portfolio.GetIncomeReport(ctx, connect.NewRequest(in))
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			return resultProtoWith(resp.Msg, incomeReportExtras(resp.Msg))
+		},
+	)
+
+	s.AddTool(
 		mcp.NewTool("eye_get_account_health",
 			readOnlyTool(),
 			mcp.WithDescription("Say, per account, whether it is producing anything and if not why — "+
@@ -258,15 +287,24 @@ func registerSyncAccount(s *server.MCPServer, c *backend.Clients) {
 				"position is not the same snapshot as one that could, and the difference does not "+
 				"show in the holdings it wrote. The unattended balance sweep re-reads accounts on "+
 				"its own schedule, so call this when the answer is wanted NOW, or to let a broker "+
-				"credential go looking for an account opened since the last sync."),
+				"credential go looking for an account opened since the last sync. "+
+				"A wallet sync also continues the wallet's transfer history in the ledger once it was "+
+				"asked for: backfill_ledger=true starts it from the first block on every chain the "+
+				"wallet holds. That full read spends far more provider quota than a balance read, so "+
+				"confirm it with the user first; a long history is finished by the syncs that follow."),
 			mcp.WithString("account_id", mcp.Required(), mcp.Description("Account UUID to sync.")),
+			mcp.WithBoolean("backfill_ledger", mcp.Description("Wallet accounts only: start reading the transfer "+
+				"history into the ledger from the first block. Defaults to false.")),
 		),
 		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			accountID, err := req.RequireString("account_id")
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			resp, err := c.Portfolio.SyncAccount(ctx, connect.NewRequest(&apiv1.SyncAccountRequest{AccountId: accountID}))
+			resp, err := c.Portfolio.SyncAccount(ctx, connect.NewRequest(&apiv1.SyncAccountRequest{
+				AccountId:      accountID,
+				BackfillLedger: req.GetBool("backfill_ledger", false),
+			}))
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
