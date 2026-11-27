@@ -2,6 +2,7 @@ package mcpserver
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"math/big"
@@ -394,6 +395,15 @@ func syncNote(resp *apiv1.SyncAccountResponse) string {
 			"%d per-item error(s): the snapshot landed but could not vouch for every balance in it.", len(errs)))
 	}
 
+	if n := resp.GetLedgerEventsCreated(); n > 0 {
+		parts = append(parts, fmt.Sprintf("%d ledger event(s) written from the wallet's transfer history.", n))
+	}
+	if errs := resp.GetLedgerErrors(); len(errs) > 0 {
+		parts = append(parts, fmt.Sprintf(
+			"%d chain(s) or movement(s) of the transfer history were not brought up to date (ledger_errors); "+
+				"the balances above are complete without them. Report them by chain.", len(errs)))
+	}
+
 	return strings.Join(parts, " ")
 }
 
@@ -514,4 +524,85 @@ func reasonsPhrase(reasons []*apiv1.HealthReason) string {
 		out = append(out, msg)
 	}
 	return strings.Join(out, "; ")
+}
+
+// incomeReportRequest maps the tool's arguments onto GetIncomeReport. The
+// backend refuses neither or both targets too; saying so here names the
+// argument rather than the RPC.
+func incomeReportRequest(req mcp.CallToolRequest) (*apiv1.GetIncomeReportRequest, error) {
+	portfolioID, accountID := req.GetString("portfolio_id", ""), req.GetString("account_id", "")
+	if (portfolioID == "") == (accountID == "") {
+		return nil, errors.New("exactly one of portfolio_id and account_id is required")
+	}
+	rawFrom, err := req.RequireString("from")
+	if err != nil {
+		return nil, err
+	}
+	rawTo, err := req.RequireString("to")
+	if err != nil {
+		return nil, err
+	}
+	from, err := parseTimestamp(rawFrom)
+	if err != nil {
+		return nil, fmt.Errorf("from: %w", err)
+	}
+	to, err := parseTimestamp(rawTo)
+	if err != nil {
+		return nil, fmt.Errorf("to: %w", err)
+	}
+	return &apiv1.GetIncomeReportRequest{
+		PortfolioId:  optString(portfolioID),
+		AccountId:    optString(accountID),
+		From:         from,
+		To:           to,
+		QuoteAssetId: optString(req.GetString("quote_asset_id", "")),
+	}, nil
+}
+
+// incomeReportExtras adds human-readable totals and rows beside the raw scaled
+// integers, and a note on what the values leave out.
+func incomeReportExtras(resp *apiv1.GetIncomeReportResponse) map[string]any {
+	vd := resp.GetValueDecimals()
+	rows := make([]map[string]any, 0, len(resp.GetRows()))
+	for _, r := range resp.GetRows() {
+		rows = append(rows, map[string]any{
+			"month":       r.GetMonth().AsTime().Format("2006-01"),
+			"income_kind": enumShort(r.GetIncomeKind().String(), "INCOME_KIND_"),
+			"symbol":      r.GetSymbol(),
+			"gross":       scaledDecimal(r.GetGrossAmount(), r.GetDecimals()),
+			"tax":         scaledDecimal(r.GetTaxAmount(), r.GetDecimals()),
+			"net":         scaledDecimal(r.GetNetAmount(), r.GetDecimals()),
+			"net_value":   scaledDecimal(r.GetNetValue(), vd),
+		})
+	}
+	return map[string]any{
+		"gross_value_human": scaledDecimal(resp.GetGrossValue(), vd),
+		"tax_value_human":   scaledDecimal(resp.GetTaxValue(), vd),
+		"net_value_human":   scaledDecimal(resp.GetNetValue(), vd),
+		"rows_human":        rows,
+		"income_note":       incomeNote(resp),
+	}
+}
+
+// incomeNote says whether the values cover every income event of the period.
+func incomeNote(resp *apiv1.GetIncomeReportResponse) string {
+	if len(resp.GetRows()) == 0 {
+		return "No income was recorded in this period."
+	}
+	// One entry per unpriced asset of an event: an event whose payment and
+	// tax are both unpriced is listed twice and is still one event.
+	events := map[string]bool{}
+	for _, u := range resp.GetUnvalued() {
+		events[u.GetEventId()] = true
+	}
+	if n := len(events); n > 0 {
+		return fmt.Sprintf("%d income event(s) had no price on their date: they are in the amounts and NOT in "+
+			"the values or totals, which therefore understate the income. They are listed in `unvalued`.", n)
+	}
+	return "Every income event of the period is valued; the totals cover all of it."
+}
+
+// enumShort is an enum name without its type prefix, lower case.
+func enumShort(name, prefix string) string {
+	return strings.ToLower(strings.TrimPrefix(name, prefix))
 }

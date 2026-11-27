@@ -25,6 +25,7 @@ var (
 		"eye_list_unpriced_holdings":    readHints,
 		"eye_calculate_portfolio_value": readHints,
 		"eye_get_account_health":        readHints,
+		"eye_income_report":             readHints,
 		"eye_list_assets":               readHints,
 		"eye_get_asset":                 readHints,
 		"eye_get_latest_price":          readHints,

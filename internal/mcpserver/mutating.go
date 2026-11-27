@@ -160,12 +160,16 @@ func registerMutatingTools(s *server.MCPServer, c *backend.Clients) {
 	s.AddTool(
 		mcp.NewTool("eye_import_transactions",
 			writeTool(false, true),
-			mcp.WithDescription("Batch-import movement history into a MANUAL account's ledger: each item is one "+
-				"event with one or more legs (asset movements). Same simulation-first workflow as "+
-				"eye_import_positions: dry_run=true, confirm the plan, then commit. Duplicates are skipped by "+
-				"external_ref, or without one when kind, executed_at and all legs match, so re-importing the "+
-				"same export is safe. Never creates assets: an unknown symbol fails its item."),
-			mcp.WithString("account_id", mcp.Required(), mcp.Description("Manual account UUID.")),
+			mcp.WithDescription("Batch-import movement history into an account's ledger: each item is one "+
+				"event with one or more legs (asset movements). A manual account takes every kind. Any other "+
+				"account of the caller takes income only (e.g. staking rewards an exchange pays, a coupon "+
+				"from a statement), and refuses per item the income kinds its own sync records (a broker's "+
+				"coupons, dividends and interest), so one payment is not recorded twice. It never writes "+
+				"holdings. Same simulation-first workflow as eye_import_positions: dry_run=true, confirm the "+
+				"plan, then commit. Duplicates are skipped by external_ref, or without one when kind, "+
+				"executed_at, legs and income kind all match, so re-importing the same export is safe. Never "+
+				"creates assets: an unknown symbol fails its item. eye_income_report sums what was imported."),
+			mcp.WithString("account_id", mcp.Required(), mcp.Description("Account UUID: manual for any kind, any other account of yours for income.")),
 			mcp.WithString("transactions", mcp.Required(), mcp.Description(
 				`JSON array of ledger events: [{"kind":"trade","executed_at":"2026-07-01T10:00:00Z",`+
 					`"external_ref":"tx-1","legs":[{"symbol":"BTC","direction":"in","role":"principal","amount":"0.1"},`+
@@ -173,7 +177,9 @@ func registerMutatingTools(s *server.MCPServer, c *backend.Clients) {
 					`{"symbol":"USDT","direction":"out","role":"fee","amount":"6"}]}, ...]. Event fields: `+
 					`kind (required: trade|transfer_in|transfer_out|deposit|withdrawal|income|fee|opening), executed_at (required, RFC 3339), `+
 					`external_ref (optional, the export's own id; the dedup key), raw (optional string map: the row as `+
-					`exported, stored and never returned), legs (required, at least one). Leg fields: symbol or asset_id, `+
+					`exported, stored and never returned), income_kind (required when kind is income, refused otherwise: `+
+					`coupon|dividend|interest|staking_reward|other), legs (required, at least one). An income event has its `+
+					`payment as an in leg and a tax withheld as an out leg, both with role income. Leg fields: symbol or asset_id, `+
 					`direction (in|out, as seen by this account), role (principal|counter|fee|income), amount (positive `+
 					`decimal string), decimals (optional storage scale, default 8), chain (optional).`)),
 			mcp.WithBoolean("dry_run", mcp.Description("Plan without writing. Defaults to true — pass false only to commit a confirmed plan.")),
