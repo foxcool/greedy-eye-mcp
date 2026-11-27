@@ -589,7 +589,13 @@ func incomeNote(resp *apiv1.GetIncomeReportResponse) string {
 	if len(resp.GetRows()) == 0 {
 		return "No income was recorded in this period."
 	}
-	if n := len(resp.GetUnvalued()); n > 0 {
+	// One entry per unpriced asset of an event: an event whose payment and
+	// tax are both unpriced is listed twice and is still one event.
+	events := map[string]bool{}
+	for _, u := range resp.GetUnvalued() {
+		events[u.GetEventId()] = true
+	}
+	if n := len(events); n > 0 {
 		return fmt.Sprintf("%d income event(s) had no price on their date: they are in the amounts and NOT in "+
 			"the values or totals, which therefore understate the income. They are listed in `unvalued`.", n)
 	}

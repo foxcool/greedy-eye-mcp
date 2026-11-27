@@ -61,7 +61,8 @@ func TestIncomeReportExtras_UnvaluedIsSpoken(t *testing.T) {
 			Symbol: "RUB", GrossAmount: "10000", TaxAmount: "1300", NetAmount: "8700", Decimals: 2, NetValue: "105",
 		}},
 		GrossValue: "745", TaxValue: "16", NetValue: "729",
-		Unvalued: []*apiv1.UnvaluedIncome{{Symbol: "USDT"}},
+		// One event, its payment and its tax both unpriced: listed twice.
+		Unvalued: []*apiv1.UnvaluedIncome{{EventId: "e1", Symbol: "USDT"}, {EventId: "e1", Symbol: "XYZ"}},
 	}
 	extras := incomeReportExtras(resp)
 	if extras["net_value_human"] != "7.29" || extras["tax_value_human"] != "0.16" {
